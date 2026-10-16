@@ -129,10 +129,11 @@ public sealed class RunModifyOpTests : IClassFixture<EngineFixture>, IDisposable
 
     private sealed class Host : IRunHost
     {
-        public Host(string? documentClass, string? path, bool canAsk = true, CoexistenceReport? coexistence = null, bool coexistAllowed = false)
+        public Host(string? documentClass, string? path, bool canAsk = true, CoexistenceReport? coexistence = null, bool coexistAllowed = false,
+            SessionPolicy? session = null)
         {
             Doc = new FakeDocument(Guard);
-            Target = new RunTarget(new object(), new object(), null, Doc, "PLAN_SANDBOX", path, documentClass, coexistence, coexistAllowed);
+            Target = new RunTarget(new object(), new object(), null, Doc, "PLAN_SANDBOX", path, documentClass, coexistence, coexistAllowed, session);
             AskDialog = canAsk ? new FakeAsk() : null;
         }
 
@@ -338,6 +339,54 @@ public sealed class RunModifyOpTests : IClassFixture<EngineFixture>, IDisposable
         Assert.Equal(reason, r.Result["reason"]?.GetValue<string>());
         Assert.Equal(1, host.AskDialog.Asked);
         Assert.Equal(answer == AskResult.Keep, host.Guard.KeepAsked);
+    }
+
+    // ── ADR-033: the session chosen in Revit ─────────────────────────────────────────────────
+
+    [Fact]
+    public void Every_change_waits_for_the_session_answer()
+    {
+        var host = new Host("sandbox", @"C:\w\PLAN_SANDBOX.rvt", session: new SessionPolicy(false, false, false, null));
+        ResponseEnvelope r = Modify(Router(host).Router, ThreeChanges, new JsonObject());
+        Assert.Equal(ResponseEnvelope.Refused, r.Status);
+        Assert.Equal(ErrorCodes.SessionPending, r.Error!.Code);
+        Assert.Contains("session window", r.Error.Message, StringComparison.Ordinal);
+        Assert.Equal(0, host.Guard.Armed);
+    }
+
+    [Fact]
+    public void The_chosen_active_project_is_changed_in_full_auto_without_a_dialog()
+    {
+        var host = new Host("unmarked", @"C:\w\PLAN.rvt", session: new SessionPolicy(true, true, false, "active project · full auto"));
+        ResponseEnvelope r = Modify(Router(host).Router, ThreeChanges, new JsonObject { ["dry_run"] = false });
+        Assert.Equal("committed", r.Result!["outcome"]!.GetValue<string>());
+        Assert.Equal("auto", r.Result["policy_applied"]!.GetValue<string>());
+        Assert.Equal("active project · full auto", r.Result["session"]!.GetValue<string>());
+        Assert.Equal(0, host.AskDialog!.Asked);
+    }
+
+    [Fact]
+    public void A_supervised_session_asks_keep_or_discard_before_keeping_but_not_for_a_dry_run()
+    {
+        var host = new Host("unmarked", @"C:\w\PLAN.rvt", session: new SessionPolicy(true, true, true, "active project · supervised"));
+        (RequestRouter router, _) = Router(host);
+        ResponseEnvelope dry = Modify(router, ThreeChanges, new JsonObject());
+        Assert.Equal("dry_run", dry.Result!["reason"]!.GetValue<string>());
+        Assert.Equal(0, host.AskDialog!.Asked);
+        host.AskDialog.Answer = AskResult.Discard;
+        ResponseEnvelope kept = Modify(router, ThreeChanges, new JsonObject { ["dry_run"] = false });
+        Assert.Equal(1, host.AskDialog.Asked);
+        Assert.Equal("ask", kept.Result!["policy_applied"]!.GetValue<string>());
+        Assert.Equal("supervised_session", kept.Result["policy_reason"]!.GetValue<string>());
+        Assert.Equal("rolled_back", kept.Result["outcome"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Sandbox_scope_still_refuses_a_document_that_is_not_a_copy()
+    {
+        var host = new Host("unmarked", @"C:\w\PLAN.rvt", session: new SessionPolicy(true, false, false, "sandbox copies · full auto"));
+        ResponseEnvelope r = Modify(Router(host).Router, ThreeChanges, new JsonObject());
+        Assert.Equal(ErrorCodes.SandboxRequired, r.Error!.Code);
     }
 
     // ── ADR-019: another assistant add-in loaded ─────────────────────────────────────────────

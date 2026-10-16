@@ -302,6 +302,8 @@ Not taken over on purpose: `pyrevit:place_family` (element creation, excluded by
 
 RIFT's guarantees are enforced by the add-in, inside Revit, whatever the client. The server adds lint and refuses some calls before sending them. Your MCP client's permission prompts are a third layer, not the main one.
 
+**The session question (ADR-033).** When an assistant session starts, RIFT opens a window in Revit and asks you two things, once: *where* the assistant may change the model (SANDBOX copies only, or the project that is active when you answer) and *how* (supervised: Revit shows Keep/Discard before any change is kept; full auto: changes are kept without a dialog). Until you answer, every change is refused with `SESSION_PENDING`; reads go on. The assistant cannot answer the window, and neither can text found in the model. You can change the answer from **status** at any time. With the answer in place you can let Claude Code stop asking for each action: `rift-mcp permissions --install --profile session`.
+
 **Document policy (ADR-009).** RIFT classifies the active document by its *file name*, never its title:
 
 | Class | Rule | Writes |
@@ -379,6 +381,7 @@ The benchmark's action list (section (e)) schedules all P1 items before v1.0.0. 
 | `developer` | `false` | Shows the developer-only **Probe Python** ribbon button |
 | `agent_patterns` | `RvtMcp*`, `revit_mcp*`, `RevitMCP*`, `*mcp-server-for-revit*` | Assembly name patterns of other assistant add-ins (ADR-019); matched case-insensitively, `*` and `?` as wildcards |
 | `coexist_with_other_agents` | `false` | Keep changes even while another assistant add-in is loaded (otherwise `AGENT_CONFLICT`; dry runs always work) |
+| `session_prompt` | `true` | Ask in Revit, at the start of each assistant session, where (SANDBOX copies or the active project) and how (full auto or supervised) the assistant may change the model (ADR-033). `false`: SANDBOX copies only, policy as requested |
 
 Example:
 
@@ -436,6 +439,7 @@ Start with `rift-mcp doctor`. Every failed call returns `{"ok": false, "error": 
 | `UNAUTHORIZED` | The signature was refused (wrong secret, clock outside ±120 s, replayed nonce) | Restart the MCP server. After ten failures the add-in rotates its secret, and the client re-reads it once. |
 | `PROTOCOL_MISMATCH` | Server and add-in speak different major protocol versions | Rebuild both from the same commit |
 | `REVIT_BUSY` | Revit did not start the job within `start_timeout_s`; the message names the modal dialog when there is one | Close the dialog and call again. The cancelled job never runs later. |
+| `SESSION_PENDING` | The session window in Revit has not been answered yet (ADR-033) | Answer it in Revit (or open it again from **status**, `change session`), then call again |
 | `NO_DOCUMENT` | No active document | Open one |
 | `DOCUMENT_MISMATCH` | `expected_document` is not the active document | Activate the intended document, or fix the path or title |
 | `EXPECTED_DOCUMENT_REQUIRED` | A write was sent without `expected_document` | Pass the path or title from `get_context` |

@@ -26,6 +26,21 @@ SCOPES = ("user", "project", "local")
 # Tools that must ask first: free code and the main write paths. Typed writes follow their risk.
 MUST_ASK = ("run_query", "run_modify", "batch")
 
+#: ``ask``: reads allowed, scripts and writes asked in Claude Code (the default).
+#: ``session``: every RIFT tool allowed in Claude Code; changes are governed by the session the
+#: user chooses in Revit at the start of each assistant session (ADR-033: sandbox or active
+#: project, full auto or supervised with Keep/Discard in Revit).
+PROFILES = ("ask", "session")
+
+
+def profile_rules(rules: dict[str, list[str]], profile: str) -> dict[str, list[str]]:
+    """The generated rules for ``profile``: ``session`` moves every ``ask`` rule to ``allow``."""
+    if profile not in PROFILES:
+        raise ValueError(f"profile must be one of {', '.join(PROFILES)}")
+    if profile == "ask":
+        return {"allow": list(rules.get("allow", [])), "ask": list(rules.get("ask", []))}
+    return {"allow": [*rules.get("allow", []), *rules.get("ask", [])], "ask": []}
+
 
 def settings_path(scope: str, home: Path | None = None, cwd: Path | None = None) -> Path:
     """The settings file of a scope.
@@ -171,13 +186,28 @@ def audit(paths: list[Path]) -> dict[str, Any]:
     must = [PREFIX + t for t in MUST_ASK]
     missing = [r for r in must if r not in asked]
     allowed_anyway = [r for r in must if r in allowed]
+    writes_ask = not missing and not allowed_anyway
+    session = all(r in allowed and r not in asked for r in must)
+    if writes_ask:
+        profile, hint = "ask", None
+    elif session:
+        profile = "session"
+        hint = (
+            "RIFT's tools run without a Claude Code prompt: changes are governed by the session "
+            "window in Revit (keep session_prompt on in config.json). To be asked in Claude Code "
+            "again: rift-mcp permissions --install --profile ask"
+        )
+    else:
+        profile = "none"
+        hint = (
+            "run_query, run_modify and batch run code or change the model without a "
+            "confirmation in your Claude Code settings: rift-mcp permissions --install "
+            "(user scope by default), or --profile session to rely on the session window in Revit"
+        )
     return {
         "files": found,
-        "writes_ask": not missing and not allowed_anyway,
+        "profile": profile,
+        "writes_ask": writes_ask,
         "not_asking": sorted(set(missing) | set(allowed_anyway)),
-        "hint": None
-        if not missing and not allowed_anyway
-        else "run_query, run_modify and batch run code or change the model without a "
-        "confirmation in "
-        "your Claude Code settings: rift-mcp permissions --install (user scope by default)",
+        "hint": hint,
     }

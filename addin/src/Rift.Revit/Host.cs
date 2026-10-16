@@ -18,6 +18,7 @@ using Rift.Core.Config;
 using Rift.Core.Control;
 using Rift.Core.Discovery;
 using Rift.Core.Jobs;
+using Rift.Core.Json;
 using Rift.Core.Journal;
 using Rift.Core.Lease;
 using Rift.Core.Logging;
@@ -60,6 +61,9 @@ public sealed class Host : IDisposable, IUiHost
     private PauseGate? _pause;
     private ActivityCard? _card;
     private readonly ActivityLog _activity = new();
+    private readonly SessionGate _session = new();
+    private string _sessionClient = "assistant";
+    private (string? Path, string? Title, string? Class) _sessionProject;
     private IntPtr _mainWindow;
     private RiftConfig _config = RiftConfig.Default;
     private Lazy<IronPythonEngine>? _engine;
@@ -121,6 +125,17 @@ public sealed class Host : IDisposable, IUiHost
         {
             _log.Write("lease granted to " + holder.Name + " " + holder.Version);
             EnqueueUi(_ => _card?.Show(CardContent.Connected(holder.Name + " " + holder.Version)));
+            // ADR-033: a new assistant session is asked, in Revit, where and how it may change the model.
+            if (_config.SessionPrompt && _session.Begin(holder.ClientId))
+            {
+                _sessionClient = holder.Name + " " + holder.Version;
+                EnqueueUi(ShowSession);
+            }
+        };
+        _session.Changed += (client, choice) =>
+        {
+            _log.Write(choice is null ? "session started, question asked" : "session answered: " + choice.Text());
+            EnqueueUi(_ => _card?.Show(CardContent.Session(choice)));
         };
 
         var jobs = new JobTable(TimeSpan.FromMinutes(10));
@@ -137,14 +152,14 @@ public sealed class Host : IDisposable, IUiHost
             });
         };
         Func<IScriptEngine> engine = Engine;
-        Func<IRunHost> runHost = () => RevitRunHost.Current(() => _config, _log);
+        Func<IRunHost> runHost = () => RevitRunHost.Current(() => _config, _log, SessionFor);
         var runQuery = new RunQueryOp(engine, runHost, _journal, _log);
         var router = new RequestRouter(
             new IOperationHandler[]
             {
                 new LeaseOp(_lease),
                 new JobOp(jobs),
-                new ContextOp(_version, () => _config, EngineState),
+                new ContextOp(_version, () => _config, EngineState, SessionFor, SessionState),
                 new CompileOp(engine),
                 runQuery,
                 new ToolOp(new IToolHandler[]
@@ -304,10 +319,84 @@ public sealed class Host : IDisposable, IUiHost
         string? coexistence = names.Count == 0 ? null : string.Join(", ", names);
         return new StatusSnapshot(_version, pause is { State: ServerState.Paused }, pause?.SinceUtc, _listener?.PipeName, _listener?.Served ?? 0,
             holder is null ? null : holder.Name + " " + holder.Version, holder?.Since, _lease?.Until, _secrets?.Generation ?? 0, _lastRefusal,
-            EngineLine(), _card?.Enabled ?? _config.ActivityCard, _log.Path, coexistence);
+            EngineLine(), _card?.Enabled ?? _config.ActivityCard, _log.Path, coexistence,
+            !_config.SessionPrompt || _session.Client is null ? null : _session.Choice?.Text() ?? "not answered");
     }
 
     ActivitySnapshot IUiHost.Activity() => _activity.Snapshot();
+
+    bool IUiHost.ChooseSession(WorkScope scope, Supervision supervision)
+    {
+        string? client = _session.Client;
+        (string? path, string? title, _) = _sessionProject;
+        return client is not null && _session.Choose(client, scope, supervision, path, title);
+    }
+
+    void IUiHost.OpenSession()
+    {
+        if (_config.SessionPrompt && _session.Client is not null)
+        {
+            EnqueueUi(ShowSession);
+        }
+    }
+
+    /// <summary>Opens the session window on the API thread, with the active document as "the active project".</summary>
+    private void ShowSession(UIApplication uiapp)
+    {
+        string? client = _session.Client;
+        if (client is null)
+        {
+            return;
+        }
+        Document? doc = uiapp.ActiveUIDocument?.Document;
+        string? path = doc is null ? null : RevitRunHost.DocumentPath(doc);
+        _sessionProject = (path, doc?.Title, doc is null ? null : DocumentClassifier.Name(DocumentClassifier.Classify(path, _config)));
+        var question = new SessionQuestion(_sessionClient, _sessionProject.Title, _sessionProject.Class, _session.Choice);
+        UiWindows.Close("session");
+        UiWindows.Show("session", () => new SessionWindow(this, question, Owner(uiapp)));
+    }
+
+    /// <summary>The session as the write policy sees it for one document (null when session_prompt is off).</summary>
+    private SessionPolicy? SessionFor(string? path, string? title)
+    {
+        if (!_config.SessionPrompt)
+        {
+            return null;
+        }
+        SessionChoice? choice = _session.Choice;
+        return choice is null
+            ? new SessionPolicy(false, false, false, null)
+            : new SessionPolicy(true, choice.IsProject(path, title), choice.Supervision == Supervision.Supervised, choice.Text());
+    }
+
+    /// <summary>The <c>session</c> block of <c>get_context</c>.</summary>
+    private JsonNode SessionState()
+    {
+        if (!_config.SessionPrompt)
+        {
+            return new JsonObject { ["state"] = "off", ["scope"] = "sandbox", ["supervision"] = "as_requested" };
+        }
+        SessionChoice? choice = _session.Choice;
+        if (choice is null)
+        {
+            return new JsonObject
+            {
+                ["state"] = _session.Client is null ? "no_session" : "pending",
+                ["hint"] = "the user answers the RIFT session window in Revit; changes are refused (SESSION_PENDING) until then, reads go on",
+            };
+        }
+        return new JsonObject
+        {
+            ["state"] = "chosen",
+            ["scope"] = choice.Scope == WorkScope.Sandbox ? "sandbox" : "active_project",
+            ["supervision"] = choice.Supervision == Supervision.FullAuto ? "full_auto" : "supervised",
+            ["project"] = choice.ProjectTitle is null ? null : Sanitizer.Sanitize(choice.ProjectTitle, 260),
+            ["chosen_utc"] = choice.ChosenUtc.ToString("O", CultureInfo.InvariantCulture),
+            ["meaning"] = choice.Supervision == Supervision.FullAuto
+                ? "do not ask the user to confirm each change: a change is kept when dry_run is false"
+                : "do not ask the user to confirm each change in the chat: Revit shows Keep/Discard before a change is kept",
+        };
+    }
 
     void IUiHost.TogglePause() => Invoke("server.toggle", null);
 

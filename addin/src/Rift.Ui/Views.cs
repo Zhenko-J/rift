@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text.Json;
 
 using Rift.Core.Activity;
+using Rift.Core.Control;
 using Rift.Core.Protocol;
 
 namespace Rift.Ui;
@@ -26,7 +27,8 @@ public sealed record StatusSnapshot(
     string Engine,
     bool CardOn,
     string? LogPath,
-    string? Coexistence);
+    string? Coexistence,
+    string? Session = null);
 
 /// <summary>What the windows ask of the host (UI gate 3). Called on Revit's UI thread only.</summary>
 public interface IUiHost
@@ -40,6 +42,12 @@ public interface IUiHost
 
     /// <summary>Switches the activity card and remembers it in <c>config.json</c>.</summary>
     void SetActivityCard(bool enabled);
+
+    /// <summary>The user answered the session window; false when another session started meanwhile.</summary>
+    bool ChooseSession(WorkScope scope, Supervision supervision);
+
+    /// <summary>Opens the session window again (to change the answer, or to give it after closing the window).</summary>
+    void OpenSession();
 }
 
 /// <summary>One line of History, formatted (UI gate 3): every text is ready to show.</summary>

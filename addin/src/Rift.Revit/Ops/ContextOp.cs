@@ -25,12 +25,17 @@ internal sealed class ContextOp : IOperationHandler
     private readonly string _addinVersion;
     private readonly Func<RiftConfig> _config;
     private readonly Func<JsonNode?> _engineState;
+    private readonly Func<string?, string?, Scripting.Runs.SessionPolicy?> _session;
+    private readonly Func<JsonNode?> _sessionState;
 
-    public ContextOp(string addinVersion, Func<RiftConfig> config, Func<JsonNode?> engineState)
+    public ContextOp(string addinVersion, Func<RiftConfig> config, Func<JsonNode?> engineState,
+        Func<string?, string?, Scripting.Runs.SessionPolicy?>? session = null, Func<JsonNode?>? sessionState = null)
     {
         _addinVersion = addinVersion;
         _config = config;
         _engineState = engineState;
+        _session = session ?? ((_, _) => null);
+        _sessionState = sessionState ?? (() => null);
     }
 
     public string Op => "context";
@@ -63,7 +68,8 @@ internal sealed class ContextOp : IOperationHandler
             ["addin"] = new JsonObject { ["version"] = _addinVersion, ["pid"] = Environment.ProcessId },
             ["document"] = active is null ? null : Describe(active, active, _config()),
             ["documents"] = documents,
-            ["policy"] = Policy(active, _config()),
+            ["session"] = _sessionState(),
+            ["policy"] = Policy(active, _config(), _session),
             ["coexistence"] = CoexistenceOf(_config()),
             ["engine"] = _engineState(),
         };
@@ -83,14 +89,16 @@ internal sealed class ContextOp : IOperationHandler
     }
 
     /// <summary>What a write would get on the active document (ADR-009), so that an assistant can plan before sending a script.</summary>
-    private static JsonObject Policy(Document? active, RiftConfig config)
+    private static JsonObject Policy(Document? active, RiftConfig config, Func<string?, string?, Scripting.Runs.SessionPolicy?> session)
     {
-        string? documentClass = active is null ? null : DocumentClassifier.Name(DocumentClassifier.Classify(RevitRunHost.DocumentPath(active), config));
-        Scripting.Runs.PolicyDecision decision = Scripting.Runs.WritePolicy.Decide(documentClass, Scripting.Runs.WritePolicy.Auto, allowReference: false);
+        string? path = active is null ? null : RevitRunHost.DocumentPath(active);
+        string? documentClass = active is null ? null : DocumentClassifier.Name(DocumentClassifier.Classify(path, config));
+        Scripting.Runs.PolicyDecision decision = Scripting.Runs.WritePolicy.Decide(documentClass, Scripting.Runs.WritePolicy.Auto, allowReference: false,
+            active is null ? null : session(path, active.Title));
         return new JsonObject
         {
             ["read_only"] = false,
-            ["milestone"] = "M2",
+            ["milestone"] = "M4",
             ["run_modes"] = new JsonArray("query", "modify"),
             ["document_class"] = documentClass,
             ["write_policy"] = decision.Refused ? decision.RefusalCode : decision.Applied,

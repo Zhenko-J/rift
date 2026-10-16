@@ -13,6 +13,9 @@ public static class ErrorCodes
     public const string RevitBusy = "REVIT_BUSY";
     public const string ListenerDead = "LISTENER_DEAD";
     public const string AgentConflict = "AGENT_CONFLICT";
+
+    /// <summary>The user has not answered the session question in Revit yet: no change runs until they do.</summary>
+    public const string SessionPending = "SESSION_PENDING";
     public const string NoDocument = "NO_DOCUMENT";
     public const string DocumentMismatch = "DOCUMENT_MISMATCH";
     public const string SandboxRequired = "SANDBOX_REQUIRED";

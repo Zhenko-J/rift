@@ -140,6 +140,14 @@ public static class UiWindows
         return created;
     }
 
+    public static void Close(string key)
+    {
+        if (s_open.TryGetValue(key, out Window? open))
+        {
+            open.Close();
+        }
+    }
+
     public static void CloseAll()
     {
         foreach (Window w in new List<Window>(s_open.Values))

@@ -30,7 +30,7 @@ internal sealed class RevitRunHost : IRunHost
     private readonly UIApplication _uiapp;
     private readonly FileLog _log;
 
-    public RevitRunHost(UIApplication uiapp, Func<RiftConfig> config, FileLog log)
+    public RevitRunHost(UIApplication uiapp, Func<RiftConfig> config, FileLog log, Func<string?, string?, SessionPolicy?>? session = null)
     {
         _uiapp = uiapp;
         _log = log;
@@ -40,7 +40,8 @@ internal sealed class RevitRunHost : IRunHost
         RiftConfig settings = config();
         Target = new RunTarget(uiapp, uiapp.Application, uidoc, doc, doc?.Title, path,
             doc is null ? null : DocumentClassifier.Name(DocumentClassifier.Classify(path, settings)),
-            Coexistence.Detect(LoadedAssemblyNames(), settings.AgentPatterns), settings.CoexistWithOtherAgents);
+            Coexistence.Detect(LoadedAssemblyNames(), settings.AgentPatterns), settings.CoexistWithOtherAgents,
+            session?.Invoke(path, doc?.Title));
         Extras = new Dictionary<string, object?>
         {
             ["DB"] = new ScriptNamespace("Autodesk.Revit.DB"),
@@ -63,7 +64,8 @@ internal sealed class RevitRunHost : IRunHost
 
     public IAskDialog? Ask => new AskDialog((UIDocument?)Target.UiDoc, _log);
 
-    public static IRunHost Current(Func<RiftConfig> config, FileLog log) => new RevitRunHost(RevitDispatcher.Current, config, log);
+    public static IRunHost Current(Func<RiftConfig> config, FileLog log, Func<string?, string?, SessionPolicy?>? session = null) =>
+        new RevitRunHost(RevitDispatcher.Current, config, log, session);
 
     /// <summary>Names of the assemblies loaded in the process, every load context included (ADR-019).</summary>
     public static IEnumerable<string?> LoadedAssemblyNames() =>

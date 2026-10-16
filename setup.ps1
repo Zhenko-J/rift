@@ -25,11 +25,16 @@
 .PARAMETER WithPermissions
   Also merges RIFT's permission rules into the Claude Code settings of the same scope (reads allowed, scripts and
   writes asked first). A backup of the settings file is written first; other rules are kept.
+.PARAMETER PermissionProfile
+  With -WithPermissions: 'ask' (default) asks in Claude Code before scripts and writes; 'session' asks nothing in Claude
+  Code and relies on the session window RIFT shows in Revit at the start of each assistant session (SANDBOX copies or the
+  active project, full auto or supervised with Keep/Discard in Revit).
 .EXAMPLE
   pwsh -File setup.ps1
   pwsh -File setup.ps1 -CheckOnly
   pwsh -File setup.ps1 -Scope local
   pwsh -File setup.ps1 -SkipAddin -NoRegister
+  pwsh -File setup.ps1 -WithPermissions -PermissionProfile session
 #>
 [CmdletBinding()]
 param(
@@ -39,7 +44,8 @@ param(
     [switch]$SkipAddin,
     [switch]$SkipServer,
     [switch]$NoRegister,
-    [switch]$WithPermissions
+    [switch]$WithPermissions,
+    [ValidateSet('ask', 'session')][string]$PermissionProfile = 'ask'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -169,8 +175,8 @@ else {
         Write-Ok 'registered as "rift"'
     }
     if ($WithPermissions) {
-        Write-Note "merging the permission rules into the Claude Code settings ($Scope scope)"
-        & uv run --directory $server --quiet rift-mcp permissions --install --scope $Scope
+        Write-Note "merging the permission rules into the Claude Code settings ($Scope scope, profile $PermissionProfile)"
+        & uv run --directory $server --quiet rift-mcp permissions --install --scope $Scope --profile $PermissionProfile
         if ($LASTEXITCODE -ne 0) { Stop-Setup 'the permission rules could not be merged.' 'Read the message above; the settings file was left as it was.' }
         Write-Ok 'permission rules merged (a backup of the previous settings file was kept)'
     }
@@ -193,7 +199,11 @@ if (-not $SkipServer) {
 Write-Step '7/7' 'Next steps'
 Write-Host '    1. Start Revit. The add-in is not code-signed yet: answer "Always Load" once.'
 Write-Host '    2. In the NORN tab (RIFT creates it), RIFT panel: hover "server on" and "status", click "status".'
-if ($WithPermissions) {
+if ($WithPermissions -and $PermissionProfile -eq 'session') {
+    Write-Host '    3. Permission rules are in place (profile session): Claude Code asks nothing; at the start of each session'
+    Write-Host '       RIFT asks you in Revit where (SANDBOX copies or the active project) and how (full auto or supervised).'
+}
+elseif ($WithPermissions) {
     Write-Host '    3. Permission rules are in place: reads run freely, scripts and writes ask first.'
 }
 else {
@@ -201,7 +211,8 @@ else {
     Write-Host '         uv run --directory server rift-mcp permissions --install'
     Write-Host '       (or run setup.ps1 again with -WithPermissions). rift-mcp doctor tells whether they are in place.'
 }
-Write-Host '    4. Work on a copy of your model whose file name contains SANDBOX: RIFT refuses writes anywhere else.'
+Write-Host '    4. When the assistant connects, RIFT asks you in Revit where it may change the model: SANDBOX copies only'
+Write-Host '       (a copy whose file name contains SANDBOX) or the active project, and whether you approve each change.'
 Write-Host '    5. In your MCP client, ask: "Use rift: get_context". Then read INSTALL.md, section "First session".'
 Write-Host ''
 Write-Host 'RIFT is installed.' -ForegroundColor Green

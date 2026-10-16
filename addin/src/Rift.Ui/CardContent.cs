@@ -49,6 +49,11 @@ public sealed record CardContent(PastilleState State, string Label, string Aside
         return new CardContent(PastilleState.Paused, "server", "paused by you at " + at + " · every call is refused until you resume", null, null);
     }
 
+    /// <summary>A session started (choice null: the question waits in Revit) or the user answered it.</summary>
+    public static CardContent Session(SessionChoice? choice) => choice is null
+        ? new CardContent(PastilleState.Paused, "session", "answer the session window · changes wait until you do", null, null)
+        : new CardContent(PastilleState.Done, "session", "session: " + choice.Text(), null, null);
+
     /// <summary>The user resumed the server from the ribbon.</summary>
     public static CardContent Resumed() =>
         new(PastilleState.Done, "server", "resumed · the next call goes through", null, null);

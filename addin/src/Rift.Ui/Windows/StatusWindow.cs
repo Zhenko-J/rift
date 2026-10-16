@@ -41,6 +41,8 @@ public sealed class StatusWindow : RiftWindow
         tiles.Children.Add(Tile(Z.InsetTile("script engine", s.Engine)));
         tiles.Children.Add(Tile(Z.InsetTile("last refusal", s.LastRefusal ?? "none")));
         tiles.Children.Add(Tile(Z.InsetTile("other agents", s.Coexistence ?? "none detected")));
+        tiles.Children.Add(Tile(Z.InsetTile("session", s.Session ?? "no assistant session",
+            s.Session == "not answered" ? "changes are refused until you answer" : null)));
         body.Children.Add(tiles);
 
         var log = Z.InsetTile("log", s.LogPath ?? "-", _copied);
@@ -58,6 +60,10 @@ public sealed class StatusWindow : RiftWindow
             _host.SetActivityCard(!s.CardOn);
             Refresh(true);
         }));
+        if (s.Session is not null)
+        {
+            verbs.Children.Add(Z.GhostButton("change session", _host.OpenSession));
+        }
         if (s.LogPath is not null)
         {
             string path = s.LogPath;

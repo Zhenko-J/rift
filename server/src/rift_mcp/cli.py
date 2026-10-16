@@ -54,6 +54,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also merge the permission rules into the Claude Code settings of the same scope",
     )
+    install.add_argument(
+        "--permission-profile",
+        default="ask",
+        choices=("ask", "session"),
+        help="ask: scripts and writes asked in Claude Code; session: nothing asked in Claude "
+        "Code, the session window in Revit governs changes",
+    )
 
     listings: dict[str, argparse.ArgumentParser] = {}
     for name, help_text in (
@@ -77,6 +84,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("user", "project", "local"),
         help="user: ~/.claude/settings.json; project: .claude/settings.json; "
         "local: .claude/settings.local.json",
+    )
+    listings["permissions"].add_argument(
+        "--profile",
+        default="ask",
+        choices=("ask", "session"),
+        help="ask (default): reads allowed, scripts and writes asked first; session: every RIFT "
+        "tool allowed, changes governed by the session window in Revit (ADR-033)",
     )
 
     sub.add_parser("doctor", help="list the Revit instances seen and the one that would be used")
@@ -107,7 +121,10 @@ def main(argv: list[str] | None = None) -> int:
         return main_serve()
     if args.command == "install":
         return install_command(
-            args.scope, print_only=args.print_only, with_permissions=args.with_permissions
+            args.scope,
+            print_only=args.print_only,
+            with_permissions=args.with_permissions,
+            profile=args.permission_profile,
         )
     if args.command == "tools":
         return listing_command("tools", args.format or "md", check=args.check, write=args.write)
@@ -117,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
             print("permissions: only --format claude is supported", file=sys.stderr)
             return 2
         if args.install:
-            return permissions_install(args.scope)
+            return permissions_install(args.scope, args.profile)
         return listing_command("permissions", fmt, check=args.check, write=args.write)
     if args.command == "schemas":
         return listing_command("schemas", args.format or "json", check=args.check, write=args.write)
@@ -131,7 +148,9 @@ def main(argv: list[str] | None = None) -> int:
     return 2
 
 
-def install_command(scope: str, *, print_only: bool, with_permissions: bool = False) -> int:
+def install_command(
+    scope: str, *, print_only: bool, with_permissions: bool = False, profile: str = "ask"
+) -> int:
     from .install import install_claude, render
 
     report = install_claude(scope, print_only=print_only)
@@ -141,7 +160,7 @@ def install_command(scope: str, *, print_only: bool, with_permissions: bool = Fa
     if with_permissions and not print_only:
         # `claude mcp add` scopes map to the settings files:
         # user → ~/.claude, local and project → .claude/.
-        return permissions_install(scope)
+        return permissions_install(scope, profile)
     return 0
 
 
@@ -154,20 +173,21 @@ def permission_rules() -> dict[str, list[str]]:
     return rules
 
 
-def permissions_install(scope: str) -> int:
-    """Merges the generated rules into the Claude Code settings of ``scope``.
+def permissions_install(scope: str, profile: str = "ask") -> int:
+    """Merges the generated rules of ``profile`` into the Claude Code settings of ``scope``.
 
     A backup is written first and the file is replaced atomically."""
-    from .settings import install, settings_path
+    from .settings import install, profile_rules, settings_path
 
     path = settings_path(scope)
     try:
-        report = install(path, permission_rules())
+        report = install(path, profile_rules(permission_rules(), profile))
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"permissions not installed: {path}: {exc}", file=sys.stderr)
         return 1
     out = report.to_dict()
     out["result"] = "updated" if report.written else "already up to date"
+    out["profile"] = profile
     print(json.dumps(out, indent=2))
     return 0
 

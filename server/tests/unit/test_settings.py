@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from rift_mcp import cli
-from rift_mcp.settings import PREFIX, audit, install, merge, settings_path
+from rift_mcp.settings import PREFIX, audit, install, merge, profile_rules, settings_path
 
 RULES = {
     "allow": [PREFIX + "get_context", PREFIX + "list_views"],
@@ -111,3 +111,26 @@ def test_permissions_install_from_the_cli(tmp_path: Path, monkeypatch: pytest.Mo
     assert cli.main(["permissions", "--install"]) == 0
     saved = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert PREFIX + "run_modify" in saved["permissions"]["ask"]
+
+
+def test_the_session_profile_allows_every_rift_tool_and_doctor_names_it(tmp_path: Path) -> None:
+    rules = profile_rules(RULES, "session")
+    assert rules["ask"] == []
+    assert set(rules["allow"]) == set(RULES["allow"]) | set(RULES["ask"])
+    assert profile_rules(RULES, "ask") == RULES
+    with pytest.raises(ValueError):
+        profile_rules(RULES, "yolo")
+
+    path = tmp_path / "settings.json"
+    install(path, RULES)
+    install(path, rules)
+    saved = json.loads(path.read_text(encoding="utf-8"))["permissions"]
+    assert PREFIX + "run_modify" in saved["allow"]
+    assert PREFIX + "run_modify" not in saved["ask"]
+    report = audit([path])
+    assert report["profile"] == "session"
+    assert report["writes_ask"] is False
+    assert "session window in Revit" in report["hint"]
+    install(path, RULES)
+    assert audit([path])["profile"] == "ask"
+    assert audit([tmp_path / "none.json"])["profile"] == "none"

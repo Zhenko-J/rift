@@ -189,7 +189,7 @@ public sealed class RunQueryOp : IOperationHandler
                 new JsonObject { ["other_agents"] = new JsonArray(coexistence.OtherAgents.Select(a => (JsonNode?)JsonValue.Create(a)).ToArray()) },
                 refused: true);
         }
-        PolicyDecision policy = WritePolicy.Decide(target.DocumentClass, requested, allowReference);
+        PolicyDecision policy = WritePolicy.Decide(target.DocumentClass, requested, allowReference, target.Session);
         if (policy.Refused)
         {
             throw new OperationException(policy.RefusalCode!, WritePolicy.RefusalMessage(policy),
@@ -208,6 +208,10 @@ public sealed class RunQueryOp : IOperationHandler
         if (policy.Reason is not null)
         {
             result["policy_reason"] = policy.Reason;
+        }
+        if (target.Session is { Text: not null } session)
+        {
+            result["session"] = session.Text;
         }
         result["dry_run"] = dryRun;
         result["history_id"] = runId;

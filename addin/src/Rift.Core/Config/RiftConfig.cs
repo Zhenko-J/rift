@@ -16,7 +16,8 @@ namespace Rift.Core.Config;
 /// <summary>
 /// <c>%LOCALAPPDATA%\rift\config.json</c>: activity card switch (ADR-023), SANDBOX markers and reference names (ADR-009),
 /// other-agent window patterns (ADR-019), the start timeout of the dispatcher (ADR-008/025) and <c>developer</c>, which
-/// shows the development buttons of the ribbon (ADR-029). Loading never throws: a
+/// shows the development buttons of the ribbon (ADR-029), and <c>session_prompt</c>, the session question asked in Revit at
+/// the start of each assistant session (ADR-033; off = SANDBOX copies only, policy as requested). Loading never throws: a
 /// missing or invalid file gives <see cref="Default"/>, an invalid field keeps its default value.
 /// </summary>
 public sealed record RiftConfig(
@@ -26,7 +27,8 @@ public sealed record RiftConfig(
     IReadOnlyList<string> AgentPatterns,
     int StartTimeoutS,
     bool Developer = false,
-    bool CoexistWithOtherAgents = false)
+    bool CoexistWithOtherAgents = false,
+    bool SessionPrompt = true)
 {
     public const int MinStartTimeoutS = 5;
     public const int MaxStartTimeoutS = 300;
@@ -81,7 +83,8 @@ public sealed record RiftConfig(
             Strings(obj, "agent_patterns", d.AgentPatterns, log),
             Math.Clamp(Int(obj, "start_timeout_s", d.StartTimeoutS, log), MinStartTimeoutS, MaxStartTimeoutS),
             Bool(obj, "developer", d.Developer, log),
-            Bool(obj, "coexist_with_other_agents", d.CoexistWithOtherAgents, log));
+            Bool(obj, "coexist_with_other_agents", d.CoexistWithOtherAgents, log),
+            Bool(obj, "session_prompt", d.SessionPrompt, log));
     }
 
     /// <summary>Writes the file atomically (temp file + move).</summary>
@@ -96,6 +99,7 @@ public sealed record RiftConfig(
             ["start_timeout_s"] = StartTimeoutS,
             ["developer"] = Developer,
             ["coexist_with_other_agents"] = CoexistWithOtherAgents,
+            ["session_prompt"] = SessionPrompt,
         };
         string? dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir))

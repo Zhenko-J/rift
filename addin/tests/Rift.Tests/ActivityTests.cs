@@ -217,6 +217,18 @@ public sealed class ActivityTests
         public void TogglePause() => Paused = !Paused;
 
         public void SetActivityCard(bool enabled) => Card = enabled;
+
+        public (Rift.Core.Control.WorkScope, Rift.Core.Control.Supervision)? Chosen { get; private set; }
+
+        public bool ChooseSession(Rift.Core.Control.WorkScope scope, Rift.Core.Control.Supervision supervision)
+        {
+            Chosen = (scope, supervision);
+            return true;
+        }
+
+        public void OpenSession()
+        {
+        }
     }
 
     private static void OnSta(Action action)
@@ -255,6 +267,8 @@ public sealed class ActivityTests
                 new RiftWindowProbe(new StatusWindow(host, IntPtr.Zero)),
                 new RiftWindowProbe(new HistoryWindow(host, IntPtr.Zero)),
                 new RiftWindowProbe(new ToolsWindow(ToolCatalog.Load(), IntPtr.Zero)),
+                new RiftWindowProbe(new SessionWindow(host, new SessionQuestion("claude-code 2.0", "PLAN", "unmarked", null), IntPtr.Zero)),
+                new RiftWindowProbe(new SessionWindow(host, new SessionQuestion("claude-code 2.0", null, null, null), IntPtr.Zero)),
             })
             {
                 Assert.StartsWith("RIFT · ", w.Window.Title, StringComparison.Ordinal);
