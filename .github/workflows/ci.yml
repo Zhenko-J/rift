@@ -26,7 +26,7 @@ jobs:
         # Tool names of the pyRevit MCP extension (MIT) are cited on purpose in the registry's `origin` field (ADR-027,
         # THIRD_PARTY.md); what is forbidden is using pyRevit code: importing it or referencing its assemblies.
         run: |
-          if git grep -n -i -E '^\s*(import|from)\s+pyrevit\b|pyRevitLabs|Include="pyRevit' -- addin server shared ':!*.md'; then
+          if git grep -n -i -E '^\s*(import|from)\s+pyrevit\b|^\s*using\s+pyRevit|<(Project|Package)?Reference[^>]*pyRevit' -- addin server shared ':!*.md'; then
             echo "::error::pyRevit code used in source (clean-room, ADR-011)"; exit 1
           fi
       - name: private terms (maintainer regex kept in a secret; skipped on forks)
