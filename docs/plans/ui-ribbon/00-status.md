@@ -61,3 +61,24 @@ Status avec interrupteur de carte, `Ui/Theme.cs` appliqué à la carte, icônes 
 - **Fait.** Bouton `card` du ruban (Lucide `message-square`, libellé `card on`/`card off`, mémorisé dans `config.json`), ombre unique sous la carte d'activité (`Theme.CardShadow`), bouton et fenêtre `inbox` des commandes figées (ADR-034, le script entier est montré, seul l'utilisateur accepte), fenêtre de séance (ADR-033) ; l'option choisie de la fenêtre de séance et du filtre de Tools est remplie de l'accent (retour de la recette du 2026-10-16). Les six tranches sont codées ; `Icons.cs` reste dans `Rift.Revit` (écart accepté : rien ne l'utilise hors du ruban).
 - **Recette du 2026-10-16 (séance).** Séance en attente → `SESSION_PENDING` (17 ms, rien d'exécuté) ; réponse « sandbox · supervised » puis « full auto » via `change session`, lues par `get_context` ; essai à blanc sans dialogue en mode supervisé ; écritures gardées refusées par `AGENT_CONFLICT` (pyRevit MCP et BIMWright chargés) — `coexist_with_other_agents` activé par le mainteneur pour la recette suivante.
 - **Reste : recettes 24 à 28 dans Revit** avec l'add-in à jour (Status, History, Tools, inbox, card, Garder/Annuler en mode supervisé, full auto).
+
+## Recette M4 et M5 dans Revit 2026.3 (2026-10-16 soir)
+
+Add-in `962109b`, copie SANDBOX, pyRevit MCP et BIMWright chargés, `coexist_with_other_agents: true`, une seule séance MCP.
+
+| Point | Résultat |
+|---|---|
+| Séance en attente → écriture refusée | `SESSION_PENDING`, rien d'exécuté |
+| « sandbox · supervised » | essai à blanc sans dialogue ; écriture gardée → Garder/Annuler dans Revit, **Keep** → `committed`, `policy_reason: supervised_session` |
+| `change session` → « full auto » | écriture gardée sans dialogue, `policy_applied: auto` |
+| C# `run_query` | 64 vues lues, `print` dans stdout, 67 ms |
+| C# hors liste blanche (`System.IO.File`) | refusé à la compilation, rien d'exécuté |
+| C# boucle infinie avec `catch {}`, délai 3 s | `TIMEOUT` à 3 s, Revit répond aussitôt après |
+| C# `run_modify` (renommer une feuille, `Transaction` dans le script) | gardé, reçu « Sheets: 1 modified » |
+| Commande figée | refusée avant acceptation ; acceptée dans la boîte de réception ; exécutée sous empreinte vérifiée (le script de test lui-même avait une erreur de nom) |
+| Exports | PDF, DWG (+ .pcp), PNG, IFC écrits ; second PDF sans `overwrite` → `FILE_EXISTS` ; NWC → `EXPORTER_UNAVAILABLE` ; dossier de RIFT → refusé ; CSV de nomenclature écrit |
+| `save_document` | confirmation dans Revit, **no** → `USER_DECLINED`, rien d'enregistré |
+| `close_document` sur le document actif / `sync_with_central` hors travail partagé | refusés avec la raison |
+| Nettoyage en full auto | feuilles de test supprimées |
+
+Corrigé après la recette : le refus C# s'affichait « SyntaxError at line 1 » et une erreur de `run_query` « NameError at line 1 » ; le message du script (ou les symboles refusés) est maintenant celui que reçoit l'assistant.

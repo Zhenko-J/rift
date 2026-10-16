@@ -55,6 +55,29 @@ class RunQueryInput(BaseModel):
     mode: str = "query"
 
 
+def compile_failure(language: str, check: dict[str, Any]) -> str:
+    """The caller's message for a script that did not compile: its kind, line and reason (a C#
+    script refused by the allow-list names the refused symbols, ADR-035)."""
+    kind = "CompileError" if language == "csharp" else "SyntaxError"
+    reason = str(check.get("message") or "").strip()
+    return f"{kind} at line {check.get('line')}: {reason[:500]} (nothing was run)"
+
+
+def readable(exc: RiftError) -> RiftError:
+    """A ``SCRIPT_ERROR`` from the add-in says "ValueError at line N" (script text stays off the
+    activity card); the script's own message is in ``details.error.message``: give it to the
+    caller."""
+    if exc.code != "SCRIPT_ERROR" or not isinstance(exc.details, dict):
+        return exc
+    error = exc.details.get("error")
+    text = error.get("message") if isinstance(error, dict) else None
+    if not isinstance(text, str) or not text.strip():
+        return exc
+    line = error.get("line") if isinstance(error, dict) else None
+    suffix = f" (line {line})" if isinstance(line, int) and line > 0 else ""
+    return RiftError(exc.code, text.strip()[:500] + suffix, exc.details)
+
+
 def expected_document(value: str | None) -> dict[str, str] | None:
     """A path when it looks like one (separator or .rvt/.rfa/.rte), otherwise a title."""
     if not value:
@@ -91,7 +114,7 @@ async def run_query(client: Caller, args: RunQueryInput) -> dict[str, Any]:
             "ok": False,
             "error": {
                 "code": "SCRIPT_ERROR",
-                "message": f"SyntaxError at line {check.get('line')} (nothing was run)",
+                "message": compile_failure(args.language, check),
                 "details": {
                     "stage": "compile",
                     "line": check.get("line"),
@@ -100,21 +123,24 @@ async def run_query(client: Caller, args: RunQueryInput) -> dict[str, Any]:
                 },
             },
         }
-    response = await client.call(
-        "run",
-        {
-            "script": args.script,
-            "mode": "query",
-            "language": args.language,
-            "title": args.title,
-            "inputs": args.inputs,
-            "timeout_s": args.timeout_s,
-        },
-        timeout_s=args.timeout_s + JOB_MARGIN_S,
-        wait_s=min(args.timeout_s + 5, PIPE_WAIT_S),
-        tool=TOOL,
-        expected_document=expected_document(args.expected_document),
-    )
+    try:
+        response = await client.call(
+            "run",
+            {
+                "script": args.script,
+                "mode": "query",
+                "language": args.language,
+                "title": args.title,
+                "inputs": args.inputs,
+                "timeout_s": args.timeout_s,
+            },
+            timeout_s=args.timeout_s + JOB_MARGIN_S,
+            wait_s=min(args.timeout_s + 5, PIPE_WAIT_S),
+            tool=TOOL,
+            expected_document=expected_document(args.expected_document),
+        )
+    except RiftError as exc:
+        raise readable(exc) from exc
     out: dict[str, Any] = {
         "ok": True,
         "target": response.get("target"),

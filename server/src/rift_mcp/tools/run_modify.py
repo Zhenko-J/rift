@@ -20,7 +20,15 @@ from pydantic import BaseModel, Field
 
 from ..errors import RiftError
 from ..lint import lint
-from .run_query import JOB_MARGIN_S, MAX_TIMEOUT_S, PIPE_WAIT_S, Caller, expected_document
+from .run_query import (
+    JOB_MARGIN_S,
+    MAX_TIMEOUT_S,
+    PIPE_WAIT_S,
+    Caller,
+    compile_failure,
+    expected_document,
+    readable,
+)
 
 TOOL = "run_modify"
 
@@ -73,7 +81,7 @@ async def run_modify(client: Caller, args: RunModifyInput) -> dict[str, Any]:
             "ok": False,
             "error": {
                 "code": "SCRIPT_ERROR",
-                "message": f"SyntaxError at line {check.get('line')} (nothing was run)",
+                "message": compile_failure(args.language, check),
                 "details": {
                     "stage": "compile",
                     "line": check.get("line"),
@@ -82,25 +90,28 @@ async def run_modify(client: Caller, args: RunModifyInput) -> dict[str, Any]:
                 },
             },
         }
-    response = await client.call(
-        "run",
-        {
-            "script": args.script,
-            "mode": "modify",
-            "language": args.language,
-            "title": args.title,
-            "inputs": args.inputs,
-            "timeout_s": args.timeout_s,
-            "dry_run": args.dry_run,
-            "policy": args.policy,
-            "allow_reference": args.allow_reference,
-            "lint": args.lint,
-        },
-        timeout_s=args.timeout_s + JOB_MARGIN_S + (600 if args.policy == "ask" else 0),
-        wait_s=min(args.timeout_s + 5, PIPE_WAIT_S),
-        tool=TOOL,
-        expected_document=expected_document(args.expected_document),
-    )
+    try:
+        response = await client.call(
+            "run",
+            {
+                "script": args.script,
+                "mode": "modify",
+                "language": args.language,
+                "title": args.title,
+                "inputs": args.inputs,
+                "timeout_s": args.timeout_s,
+                "dry_run": args.dry_run,
+                "policy": args.policy,
+                "allow_reference": args.allow_reference,
+                "lint": args.lint,
+            },
+            timeout_s=args.timeout_s + JOB_MARGIN_S + (600 if args.policy == "ask" else 0),
+            wait_s=min(args.timeout_s + 5, PIPE_WAIT_S),
+            tool=TOOL,
+            expected_document=expected_document(args.expected_document),
+        )
+    except RiftError as exc:
+        raise readable(exc) from exc
     run = response.get("result") or {}
     out: dict[str, Any] = {
         "ok": True,

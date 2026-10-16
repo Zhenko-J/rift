@@ -19,7 +19,14 @@ from typing import Annotated, Any, Literal
 from pydantic import Field
 
 from ..errors import RiftError
-from .run_query import JOB_MARGIN_S, MAX_TIMEOUT_S, PIPE_WAIT_S, Caller, expected_document
+from .run_query import (
+    JOB_MARGIN_S,
+    MAX_TIMEOUT_S,
+    PIPE_WAIT_S,
+    Caller,
+    expected_document,
+    readable,
+)
 
 REQUIRED = inspect.Parameter.empty
 Refs = list[int | str]
@@ -160,14 +167,17 @@ async def call_op(client: Caller, tool: str, kwargs: dict[str, Any]) -> dict[str
     if folder is not None and not Path(folder).is_absolute():
         raise RiftError("BAD_REQUEST", "folder must be an absolute folder path")
     args["inputs"] = inputs
-    response = await client.call(
-        "tool",
-        args,
-        timeout_s=timeout_s + JOB_MARGIN_S,
-        wait_s=min(timeout_s + 5, PIPE_WAIT_S),
-        tool=tool,
-        expected_document=expected_document(document),
-    )
+    try:
+        response = await client.call(
+            "tool",
+            args,
+            timeout_s=timeout_s + JOB_MARGIN_S,
+            wait_s=min(timeout_s + 5, PIPE_WAIT_S),
+            tool=tool,
+            expected_document=expected_document(document),
+        )
+    except RiftError as exc:
+        raise readable(exc) from exc
     out: dict[str, Any] = {"ok": True, "tool": tool, "result": response.get("result")}
     out["target"] = response.get("target")
     return out

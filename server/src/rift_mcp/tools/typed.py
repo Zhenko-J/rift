@@ -361,9 +361,8 @@ async def call_typed(
 
 
 def readable(exc: RiftError) -> RiftError:
-    """A typed tool's ``SCRIPT_ERROR`` carries "ValueError at line N" (the add-in keeps script
-    messages off the activity card) and the line counts the shared prelude: the tool's own
-    message, already in ``details.error.message``, is what the caller needs."""
+    """A typed tool's ``SCRIPT_ERROR``: the tool's own message, without the line (it counts the
+    shared prelude)."""
     if exc.code != "SCRIPT_ERROR" or not isinstance(exc.details, dict):
         return exc
     error = exc.details.get("error")

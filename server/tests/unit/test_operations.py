@@ -158,3 +158,25 @@ async def test_csharp_scripts_are_sent_with_their_language_and_skip_the_python_l
     assert out.get("ok") is not False, out
     assert addin.calls[1]["args"]["language"] == "csharp"
     assert addin.calls[2]["args"]["language"] == "csharp"
+
+
+def test_script_errors_carry_their_own_message() -> None:
+    from rift_mcp.tools.run_query import compile_failure, readable
+
+    msg = compile_failure(
+        "csharp", {"line": 1, "message": "not allowed in RIFT C# scripts: line 1 System.IO.File"}
+    )
+    assert msg.startswith("CompileError at line 1: not allowed") and msg.endswith(
+        "(nothing was run)"
+    )
+    assert compile_failure("python", {"line": 3, "message": "bad"}).startswith(
+        "SyntaxError at line 3: bad"
+    )
+    exc = readable(
+        RiftError(
+            "SCRIPT_ERROR",
+            "NameError at line 1",
+            {"error": {"message": "NameError: name 'x' is not defined", "line": 1}},
+        )
+    )
+    assert exc.message == "NameError: name 'x' is not defined (line 1)"
