@@ -49,6 +49,7 @@ public sealed class DiscoveryFileTests : IDisposable
         var discovery = new DiscoveryFile(_dir, FileLog.Null);
         string path = discovery.Write(Info(77, 1, new string('p', 2000)));
         using var stop = new CancellationTokenSource();
+        using var firstRead = new ManualResetEventSlim(false);
         int parsed = 0;
         Task reader = Task.Run(() =>
         {
@@ -69,10 +70,13 @@ public sealed class DiscoveryFileTests : IDisposable
                 }
                 JsonNode node = JsonNode.Parse(text)!;   // throws on a torn write
                 Assert.Equal(77, node["pid"]!.GetValue<int>());
-                parsed++;
+                Interlocked.Increment(ref parsed);
+                firstRead.Set();
                 Thread.Sleep(1);   // a client reads now and then, not in a tight loop
             }
         });
+        // On a fast machine the writer could finish before the reader's first read: start writing once it has read.
+        Assert.True(firstRead.Wait(TimeSpan.FromSeconds(10)), "the reader never read the discovery file");
         for (int g = 2; g < 200; g++)
         {
             discovery.Write(Info(77, g, new string('p', 2000 + g)));
