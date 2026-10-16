@@ -82,3 +82,5 @@ Add-in `962109b`, copie SANDBOX, pyRevit MCP et BIMWright chargés, `coexist_wit
 | Nettoyage en full auto | feuilles de test supprimées |
 
 Corrigé après la recette : le refus C# s'affichait « SyntaxError at line 1 » et une erreur de `run_query` « NameError at line 1 » ; le message du script (ou les symboles refusés) est maintenant celui que reçoit l'assistant.
+
+**Vérification visuelle par le mainteneur (2026-10-16) :** fenêtres status, history, tools et inbox, bouton card, options choisies en orange dans la fenêtre de séance — tout s'affiche correctement. Chantier UI (M5) recetté.
