@@ -540,7 +540,7 @@ At HEAD there are 366 xUnit tests and 138 pytest tests. The xUnit tests compile 
 
 **CI** (`.github/workflows/ci.yml`) runs four jobs:
 
-- **Privacy:** gitleaks, a clean-room guard (no pyRevit reference in source) and a private-term check.
+- **Privacy:** gitleaks, a clean-room guard (no pyRevit code imported or referenced) and a private-term check.
 - **Server:** ruff, pytest, and freshness checks for the schemas, permissions, tool listings and pamphlet.
 - **Add-in:** builds without Revit, runs xUnit, verifies `SHA256SUMS.txt`, and uploads the staged add-in.
 - **Changelog:** requires a `CHANGELOG.md` line on every pull request, unless the PR has the `no-changelog` label.
