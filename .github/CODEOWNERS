@@ -1,0 +1,9 @@
+# Files that reach the LLM (skills, rules, prompts) or run inside Revit
+# (contrib, installer, CI) require the maintainer's review.
+/rules/            @Zhenko-J
+/skills/           @Zhenko-J
+/contrib/          @Zhenko-J
+/install.ps1       @Zhenko-J
+/.github/          @Zhenko-J
+/SECURITY.md       @Zhenko-J
+/docs/DECISIONS.md @Zhenko-J

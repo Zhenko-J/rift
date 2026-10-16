@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- IScriptEngine and the embedded IronPython 3.4 engine (ADR-016). No Revit. -->
+  <PropertyGroup>
+    <AssemblyName>Rift.Scripting</AssemblyName>
+    <RootNamespace>Rift.Scripting</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="IronPython" />
+    <PackageReference Include="IronPython.StdLib" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Rift.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Rift.Core\Rift.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Audit presets (ADR-024): Python sources embedded under a fixed name, read by PresetCatalog. -->
+    <EmbeddedResource Include="Presets\*.py" LogicalName="Rift.Scripting.Presets.%(Filename)%(Extension)" />
+    <!-- Typed tools (M3, ADR-032): one script per tool, _common.py prepended at load time by TypedToolCatalog. -->
+    <EmbeddedResource Include="Tools\*.py" LogicalName="Rift.Scripting.Tools.%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

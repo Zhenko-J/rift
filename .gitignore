@@ -1,0 +1,64 @@
+# --- private / local state (never commit) ---
+runs/
+# runs/ above means run journals; with core.ignorecase it also matched the source folder Rift.Scripting/Runs.
+!addin/src/*/Runs/
+captures/
+learning/
+instances/
+spill/
+selftests/
+*.key
+private-terms.txt
+export-allowlist.txt
+policy.local.json
+config.local.json
+.env
+.env.*
+
+# --- Revit / Autodesk artefacts ---
+*.rvt
+*.rte
+*.rfa
+*.rft
+*.0001.rvt
+*.dmp
+journal.*.txt
+*.slog
+*.dat
+Revit.ini
+*_backup/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.uv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- .NET ---
+bin/
+obj/
+addin/dist/
+*.user
+*.suo
+TestResults/
+.vs/
+
+# --- prototype outputs ---
+prototypes/**/results/*.json
+prototypes/**/results/*.log
+
+# --- OS / editors ---
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+*.swp

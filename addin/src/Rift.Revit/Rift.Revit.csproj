@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Everything that touches the Revit API. One configuration per Revit year (Directory.Build.props). Loaded by Rift.Addin in an isolated AssemblyLoadContext (ADR-021). -->
+  <PropertyGroup>
+    <AssemblyName>Rift.Revit</AssemblyName>
+    <RootNamespace>Rift.Revit</RootNamespace>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <!-- Activity card (ADR-023): WPF built in code, no XAML. PresentationFramework resolves in Revit's default context. -->
+    <UseWPF>true</UseWPF>
+    <!-- LibraryImport (user32: window placement and WS_EX_NOACTIVATE for the card) needs unsafe marshalling stubs. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+    <!-- Process is used only to read the process start time and to test whether a pid is alive (discovery purge), never to spawn. -->
+    <NoWarn>$(NoWarn);RS0030</NoWarn>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RevitVersion)' != ''">
+    <!-- Reference assemblies only: never copied, absent from deps.json, resolved in Revit's own load context. -->
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" ExcludeAssets="runtime" PrivateAssets="all" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" ExcludeAssets="runtime" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Rift.Core\Rift.Core.csproj" />
+    <ProjectReference Include="..\Rift.Scripting\Rift.Scripting.csproj" />
+    <!-- Theme and activity card (UI gate 3): WPF without the Revit API, loaded in the same isolated context. -->
+    <ProjectReference Include="..\Rift.Ui\Rift.Ui.csproj" />
+  </ItemGroup>
+  <!-- A plain "Debug"/"Release" build (no year) must still compile for IDE tooling: it targets the newest year's API. -->
+  <ItemGroup Condition="'$(RevitVersion)' == ''">
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" ExcludeAssets="runtime" PrivateAssets="all" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" ExcludeAssets="runtime" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>RIFT</Name>
+    <Assembly>rift\Rift.Addin.dll</Assembly>
+    <AddInId>4F312905-3FCB-4CA1-929A-54743EF76AA0</AddInId>
+    <FullClassName>Rift.Addin.App</FullClassName>
+    <VendorId>ZNKO</VendorId>
+    <VendorDescription>RIFT, https://github.com/Zhenko-J/rift</VendorDescription>
+  </AddIn>
+</RevitAddIns>

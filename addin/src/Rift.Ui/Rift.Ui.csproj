@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- In-Revit interface (ADR-029, UI gate 3): theme, activity card and, later, the windows. WPF built in code, no XAML.
+       Never references the Revit API, so that everything shown can be tested without Revit. -->
+  <PropertyGroup>
+    <AssemblyName>Rift.Ui</AssemblyName>
+    <RootNamespace>Rift.Ui</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <!-- LibraryImport (user32: card placement and WS_EX_NOACTIVATE) needs unsafe marshalling stubs. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Rift.Core\Rift.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Rift.Tests" />
+  </ItemGroup>
+</Project>

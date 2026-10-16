@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Bootstrap named in rift.addin: creates the isolated AssemblyLoadContext and loads Rift.Revit (ADR-021).
+       It must have NO dependency besides the Revit API reference assemblies. -->
+  <PropertyGroup>
+    <AssemblyName>Rift.Addin</AssemblyName>
+    <RootNamespace>Rift.Addin</RootNamespace>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <!-- Clipboard for the Status dialog's "copy the log path" link: WPF is part of the shared framework Revit runs on, no file shipped. -->
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" ExcludeAssets="runtime" PrivateAssets="all" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" ExcludeAssets="runtime" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Build order only: the bootstrap loads Rift.Revit at runtime by path, never through a compile-time reference. -->
+    <ProjectReference Include="..\Rift.Revit\Rift.Revit.csproj" ReferenceOutputAssembly="false" Private="false" SetConfiguration="Configuration=$(Configuration)" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Product names (ADR-028), shared with Rift.Core as a linked source: the bootstrap never references Rift.Core. -->
+    <Compile Include="..\Rift.Core\Brand.cs" Link="Brand.cs" />
+    <None Include="rift.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Stage: addin/dist/<year>/rift.addin + rift/{Rift.Addin.dll, Rift.Revit.dll + its deps.json and dependencies} (ADR-022). -->
+  <Target Name="Stage" AfterTargets="Build" Condition="'$(RevitVersion)' != ''">
+    <PropertyGroup>
+      <StageDir>$(MSBuildThisFileDirectory)..\..\dist\$(RevitVersion)\</StageDir>
+      <RevitOutDir>$(MSBuildThisFileDirectory)..\Rift.Revit\bin\$(Configuration)\</RevitOutDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <!-- runtimes\** holds Mono.Unix natives for Linux/macOS: useless inside Revit. -->
+      <StageRevitFiles Include="$(RevitOutDir)**\*.*" Exclude="$(RevitOutDir)**\*.pdb;$(RevitOutDir)runtimes\**;$(RevitOutDir)**\__pycache__\**" />
+    </ItemGroup>
+    <RemoveDir Directories="$(StageDir)" />
+    <Copy SourceFiles="$(OutDir)rift.addin" DestinationFolder="$(StageDir)" />
+    <Copy SourceFiles="$(OutDir)Rift.Addin.dll" DestinationFolder="$(StageDir)rift\" />
+    <Copy SourceFiles="@(StageRevitFiles)" DestinationFiles="@(StageRevitFiles->'$(StageDir)rift\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <!-- SHA256SUMS.txt (ADR-022, ADR-026 §7): one "<sha256 hex>  <path relative to the rift folder>" line per staged file,
+         sorted, lower-case hex, forward slashes, LF; verified by CI and by install.ps1 before copying. -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\..\..\tools\write_sha256sums.ps1&quot; -Folder &quot;$(StageDir)rift&quot;" />
+    <Message Importance="high" Text="RIFT staged for Revit $(RevitVersion) → $(StageDir)" />
+  </Target>
+</Project>

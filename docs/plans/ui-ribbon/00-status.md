@@ -1,0 +1,50 @@
+# État : chantier UI — bandeau et identité visuelle (M5)
+
+Chantier séparé ouvert le 2026-10-12 en application d'ADR-026 §5. Il a ses propres portes et ne bloque jamais M1-M2 : **conception seulement** tant que M2 n'est pas livré. Seule la carte d'activité (ADR-023) est livrée avec M1.
+
+- Porte 1 — Produit : APPROUVÉE 2026-10-13 (`01-produit.md`) — noms (RIFT dans l'onglet NORN), Z_D01 partout, carte sans numéral, pastille rouge pour les échecs : questions ouvertes toutes tranchées
+- Porte 2 — Architecture : APPROUVÉE 2026-10-13 (`02-architecture.md`) — les 8 points retenus tels que proposés (option (a) pour le point 5) ; porte 1 retouchée en conséquence (`THIS SESSION`, `copy log path`) ; → ADR-029
+- Porte 3 — Conception : APPROUVÉE 2026-10-13 (`03-conception.md`) — projet `Rift.Ui` retenu, pastille vide pour `PAUSED` confirmée ; → amendement d'ADR-029 (§9-10)
+- Porte 4 — Plan de tranches : APPROUVÉE 2026-10-13 (`04-tranches.md`) — 6 tranches, balle traçante = pause de bout en bout ; aucune n'ouvre avant la livraison de M2 (prochaine étape du chantier : tranche 1, après M2)
+
+## Tranches
+- [ ] Tranche 1 — balle traçante : un clic met l'assistant en pause, la carte le dit (`Rift.Ui`, `PauseGate`, ruban dans `Rift.Revit`, `PAUSED` côté client)
+- [ ] Tranche 2 — le panneau complet, avec ses icônes (Lucide, `developer`, carte mémorisée)
+- [ ] Tranche 3 — le kit Z_D01 et la fenêtre Status
+- [ ] Tranche 4 — History : ce que l'assistant a fait pendant la séance
+- [ ] Tranche 5 — Tools, recette complète et clôture (hors reçus)
+- [ ] Tranche 6 — reçus de changement dans History (après M2)
+
+## Cible (point de départ de la porte 1)
+
+Panneau `RIFT` dans l'onglet `NORN` partagé par la suite de plugins du mainteneur (ADR-028), expérience calquée sur le bandeau de rvt-mcp (ON/OFF, état, historique, carte, boîte de réception des commandes figées), restylée selon la charte « Z#D01 » du mainteneur.
+
+| Panneau | Bouton | Action | Quand |
+|---|---|---|---|
+| Server | ON / OFF | `Host.Pause()` / `Resume()` : révoque le bail, l'écouteur répond `PAUSED` ; `PushButton` dont le texte et l'icône sont permutés à l'exécution (l'API n'a pas de bouton bascule) | M5 (pas d'op de protocole : la pause se commande depuis Revit, porte 2) |
+| Server | Status | TaskDialog avec liens « Activity card on/off » et « copy log path » (pas de processus lancé, porte 2 point 5) | M1 T6 |
+| Activity | History | fenêtre WPF construite en code (`Ui/HistoryWindow.cs`) : table de jobs + journal | M5 |
+| Activity | Card | interrupteur persisté dans `config.json` (`activity_card`) | lien Status en M1 T6, bouton en M5 |
+| Bake | Inbox | commandes figées proposées, en attente d'acceptation humaine (ADR-020) | M5, après M4 |
+| Help | Tools | fenêtre catalogue lisant le `tools.json` embarqué (même source que le pamphlet) ; pas de lancement de navigateur depuis `Rift.Revit` | M5 |
+
+## Contraintes déjà connues
+- Toute `IExternalCommand` vit dans l'assembly d'amorçage `Rift.Addin` (`App.cs`) et relaie par réflexion par un point d'entrée unique `Host.Invoke(string command, object? arg)` ; le ruban lui-même est construit dans `Rift.Revit` (porte 2 point 1).
+- Fenêtres construites en code, sans XAML (ADR-021/023), créées sur le thread de l'API via `EnqueueUi`.
+- Icônes Lucide (licence ISC → `THIRD_PARTY.md`) : tracés copiés dans le code et rendus à l'exécution en 16/32 px à l'échelle du moniteur (porte 2 point 4) ; repli : PNG générés au build.
+- Couleurs, rayons et police dans un seul `Ui/Theme.cs` qui remplace les littéraux de `ActivityCard.cs`.
+- Textes d'interface en anglais (langue du dépôt).
+
+## Ce qui peut passer tôt (M1 T6, sans porte)
+
+- 2026-10-13, à la demande du mainteneur (boutons sans icône, doublon d'onglet) : **fait en avance** — ruban construit dans `Rift.Revit` (`Ui/Ribbon.cs`, ADR-029 §1 ; `Host.Start(app, bootstrapPath)`), icônes Lucide rendues au démarrage à l'échelle du moniteur (`Ui/Icons.cs`, `gauge` pour Status, `flask-conical` pour Probe Python), « Probe Python » masqué sauf `developer: true` dans `config.json`. `Icons.cs` vit dans `Rift.Revit` jusqu'à la création de `Rift.Ui` (tranche 1 du chantier), compilé en lien dans `Rift.Tests` pour être testé. Doublon : l'ancien add-in `zenrvt` est retiré par `install.ps1 -RemoveLegacy`, Revit fermé.
+
+Status avec interrupteur de carte, `Ui/Theme.cs` appliqué à la carte, icônes PNG des boutons existants, « Probe Python » masqué derrière `config.json` `developer: true`.
+
+## Tranche 1 — balle traçante (code, 2026-10-16)
+
+- **Fait, hors Revit.** Cœur : `Rift.Core/Control/PauseGate.cs` (`Pause`/`Resume`/`Toggle`, révocation du bail, annulation des jobs non démarrés en `PAUSED` refusé, `Changed`), `Job.Finished`, `JobTable.CancelNotStarted`, porte de pause du `RequestRouter` avant la recherche du handler et avant le bail (seconde vérification juste avant la création d'un job). Nouveau projet **`Rift.Ui`** (sans API Revit) : `Theme.cs` (13 couleurs de la porte 1, tailles, rayons, Consolas, pinceaux gelés), `CardContent` (connecté, résultat, en pause, repris ; un refus `PAUSED` = pastille vide), `ActivityCard` déplacée et passée au minimum Z_D01 (carte `#EAE9E6`, coins 20 px, pastille 22 px, micro-libellé `RIFT · OUTIL`, aparté, code et message seulement en échec ; plus de liseré). Ruban : grand bouton `server on` / `paused` (icône Lucide `power` en accent tant que le serveur tourne, `pause` à l'encre en pause), `status` et `probe python` en minuscules ; **infobulles et descriptions longues** sur chaque bouton (textes de la revue d'interface du 2026-10-16, voix Z_D01) ; `AvailabilityClassName` : `server` et `status` utilisables sans document ouvert. Amorçage : `App.Invoke` (point d'entrée unique par réflexion), `RelayCommand`, `ServerToggleCommand`, `AlwaysAvailable`. Hôte : `PauseGate` créé avec le bail et la table des jobs, `Host.Invoke("server.toggle")`, ligne `server:` dans Status. Client Python : `PAUSED` oublie le bail, sans nouvel essai. PipeHost : `RIFT_PIPEHOST_PAUSED=1`. `PROTOCOL.md` (sémantique de `PAUSED`), ADR-021 amendé, `THIRD_PARTY.md` (Lucide, ISC).
+- **Tests.** 1 à 4 (`PauseGateTests`), 10 (palette), 15 en partie (carte : `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`, jamais activée ni au premier plan, une seule pastille accent pour un appel en cours, carte désactivée = invisible ; apartés en minuscules sans point), 20 en partie (`Rift.Ui` sans API Revit, aucun `Topmost = true`), 21 et 22 (pytest). 352 xUnit, 137 pytest.
+- **Écarts.** `Icons.cs` reste dans `Rift.Revit` (déplacement en tranche 2) ; la carte n'a pas encore l'ombre ni l'interlettrage (tranche 3) ; le libellé du bouton tient sur deux lignes (`server` / `on`) pour rester dans la largeur d'un grand bouton ; le ruban est rafraîchi à la fois directement dans la commande et par `Changed` (incertitude 4 : on garde les deux).
+- **Reste : recette 23 dans Revit** (copie SANDBOX) — clic `server on` → `paused`, dix `get_context` → dix `PAUSED`, aucune ligne `execute op=` pendant la pause, second clic → l'appel suivant passe ; carte servie depuis `Rift.Ui` (incertitude 1) ; infobulles lues au survol.
+- **2026-10-16 — recette 23 dans Revit 2026.3** (add-in `0.1.0+fa54c72`, copie SANDBOX, un seul client). Démarrage : `alc=rift`, ruban `NORN/RIFT` construit, **carte créée depuis `Rift.Ui` sans erreur** (incertitude 1 levée : un second assembly WPF du contexte `rift` se charge dans Revit). Clic du mainteneur sur `server on` → journal `server paused by you` ; dix `get_context` envoyés aussitôt → **dix `PAUSED`** (3 à 7 ms chacun, 44 ms au total) ; **aucune ligne `execute op=`** entre la pause et la reprise ; second clic → `server resumed`, l'appel suivant reprend le bail et passe (`ok`, 23 ms). Critère 1 du produit tenu. Reste à consigner par le mainteneur : aspect du bouton (libellé et icône permutés), infobulles et descriptions longues au survol, carte « paused by you » à pastille vide puis « resumed ».

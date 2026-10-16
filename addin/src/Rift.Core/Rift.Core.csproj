@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Protocol, named-pipe transport, HMAC, discovery, jobs, policy, JSON, logging. No Revit, no WPF (ADR-021). -->
+  <PropertyGroup>
+    <AssemblyName>Rift.Core</AssemblyName>
+    <RootNamespace>Rift.Core</RootNamespace>
+  </PropertyGroup>
+</Project>

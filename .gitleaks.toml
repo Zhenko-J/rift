@@ -1,0 +1,50 @@
+title = "rift privacy rules"
+
+[extend]
+useDefault = true
+
+# Generic patterns that must never appear in a public repository.
+# Nominative terms (employer, clients, projects) are NOT listed here: the
+# maintainer checks them with a private regex stored outside the repository.
+
+[[rules]]
+id = "rift-windows-user-path"
+description = "Absolute Windows path containing a user profile name"
+regex = '''[A-Za-z]:\\Users\\[^\\\s"']+'''
+[rules.allowlist]
+paths = ['''\.gitleaks\.toml$''', '''CONTRIBUTING\.md$''']
+
+[[rules]]
+id = "rift-notion-url"
+description = "Notion page or database link"
+regex = '''notion\.so/[A-Za-z0-9_\-/]+'''
+
+[[rules]]
+id = "rift-notion-uuid"
+description = "UUID outside the tests folder (Notion ids, shared parameter GUIDs from real projects)"
+regex = '''\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b'''
+[rules.allowlist]
+paths = ['''^(?:server|extension)/.*tests/''']
+
+[[rules]]
+id = "rift-internal-decision-ids"
+description = "Internal decision / open-question / project identifiers"
+regex = '''\b(?:D-\d{3}|OQ-\d+(?:\.\d+)?|PROJECT-20\d\d-[A-Z0-9-]+|MEM-[A-Z]{3}-\d{4})\b'''
+[rules.allowlist]
+paths = ['''\.gitleaks\.toml$''']
+
+[[rules]]
+id = "rift-revit-journal-marker"
+description = "Raw Revit journal content"
+regex = '''(?:Jrn\.(?:Command|Directive|Data)|'C \d{2}-[A-Za-z]{3}-\d{4})'''
+
+[[rules]]
+id = "rift-discovery-secret"
+description = "rift instance secret"
+regex = '''"auth_token"\s*:\s*"[A-Za-z0-9+/=_\-]{32,}"'''
+
+[allowlist]
+paths = [
+  '''^LICENSE$''',
+  '''^THIRD_PARTY\.md$''',
+]

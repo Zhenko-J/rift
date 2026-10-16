@@ -1,0 +1,9 @@
+# Banned in the add-in (ADR-022): process spawning, networking and console output.
+# Format: see https://github.com/dotnet/roslyn-analyzers/blob/main/src/Microsoft.CodeAnalysis.BannedApiAnalyzers/BannedApiAnalyzers.Help.md
+T:System.Diagnostics.Process; An add-in must never spawn processes (SECURITY.md)
+T:System.Net.Http.HttpClient; An add-in must never talk to the network
+T:System.Net.WebClient; An add-in must never talk to the network
+T:System.Net.Sockets.Socket; Networking is not allowed; the only channel is the named pipe
+T:System.Net.Sockets.TcpListener; Networking is not allowed; the only channel is the named pipe
+T:System.Net.HttpListener; Excluded by ADR-001
+T:System.Console; Never write to the console inside Revit; use the file logger

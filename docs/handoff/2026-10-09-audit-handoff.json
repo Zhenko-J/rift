@@ -1,0 +1,122 @@
+{
+  "handoff": {
+    "date": "2026-10-09",
+    "subject": "Comparison of the MCP servers for Revit present on the maintainer's workstation, and what zenrvt takes from it",
+    "produced_by": "orchestrated audit (one orchestrator, four static reviewers, one code reviewer, sequential dynamic checks on a SANDBOX copy)",
+    "where_the_details_are": {
+      "public": [
+        "docs/benchmark/2026-10-09-comparison.md",
+        "docs/DECISIONS.md#ADR-026",
+        "CHANGELOG.md (Unreleased)"
+      ],
+      "private": "the full audit report with file:line evidence stays outside this repository (maintainer's workspace); nothing in it is needed to act on this hand-off"
+    }
+  },
+  "servers": [
+    {
+      "name": "mcp-server-for-revit-python (pyRevit extension)",
+      "version": "0.1.0",
+      "licence": "MIT",
+      "state": "in service, declared twice under two names on the workstation",
+      "score_total_30": 13,
+      "keep_from_it": ["IronPython access and pyRevit-style query helpers (behaviour only, clean-room)", "error hints in the run response", "route-to-tool symmetry and tests without Revit"],
+      "do_not_repeat": ["no authentication on a loopback HTTP route (cross-site request from a browser page possible)", "no timeout inside Revit", "singleton request handler shared by concurrent servers", "destructive document routes (save, close, sync) without any guard", "response size unbounded"]
+    },
+    {
+      "name": "mcp-server-for-revit (npm server + C# plugin)",
+      "version": "1.0.0",
+      "licence": "MIT",
+      "state": "declared but dead on the workstation (plugin manifest disabled); removed from the client configuration on 2026-10-09",
+      "score_total_30": 11,
+      "keep_from_it": ["zod-style typed schemas with units in the description", "one Revit call at a time (global mutex)"],
+      "do_not_repeat": ["raw TCP on a fixed well-known port, bound to all interfaces, no authentication, no framing", "native dependency that silently kills tools when missing", "errors reported as successes"]
+    },
+    {
+      "name": "rvt-mcp (bimwright)",
+      "version": "1.1.0",
+      "licence": "Apache-2.0",
+      "state": "in service; reference competitor",
+      "score_total_30": 22,
+      "keep_from_it": [
+        "tool annotations readOnly/destructive/idempotent driving a generated client allow-list and a --read-only mode",
+        "_changes and _history receipts on every mutating call, record_change, per-model history",
+        "survey_change_impact with an explicit scope threshold before type changes",
+        "per-instance discovery files, switch_target, structured TARGET_* errors",
+        "response size guard with file spill and *_truncated fields",
+        "baked tools: scripts frozen into compiled commands with ribbon slots after human acceptance",
+        "in-Revit activity card, history window, ribbon ON/OFF",
+        "template-centric typed tools: view templates, filters, shared parameters, schedules, sheets, materials, families, audit",
+        "C# through Roslyn in process with a failures pre-processor",
+        "no telemetry, secret masking, path sanitising"
+      ],
+      "do_not_repeat": [
+        "guard rails that are a convention (prompt) rather than enforced by the server",
+        "no document policy by file name, no dry-run on the most common writes, no MCP undo",
+        "session token stored in clear in a user-readable file (acceptable, but zenrvt's secret file and signed requests do better)",
+        "one client per instance with no queueing of a second client (zenrvt answers LEASE_HELD with the holder)",
+        "unsigned binaries"
+      ]
+    },
+    {
+      "name": "zenrvt",
+      "version": "0.1.0 (M0)",
+      "licence": "Apache-2.0",
+      "state": "not connected: no listener, no MCP server process, zero tools; ribbon with Status and Probe Python only",
+      "score_total_30": 15,
+      "gaps_to_close_before_any_listener": [
+        "__import__ guard and closed standard-library subset (SECURITY.md promised them)",
+        "timeout invariant enforced inside Zenrvt.Scripting; except-narrowing on the AST covering KeyboardInterrupt and tuple forms",
+        "stdout/stderr bounded to 1 MiB; result_ref for results above the frame limit",
+        "installed add-in older than the timeout fix; SHA256SUMS.txt never produced by Stage",
+        "ADR-002/004/008 still written for the HTTP design",
+        "git remote not configured, CI never executed; the clean-room check would fail on two source lines that mention pyRevit"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "ADR-026",
+      "summary": "zenrvt converges the typed, annotated tool surface and in-Revit experience of rvt-mcp with the Python scripting of the pyRevit extension, on top of its own authenticated transport, document policy, read guard and journal; guard rails are enforced by the server so that no client-side hook is required; C# joins Python under the same guard; the in-Revit UI (ribbon, icons, history window, visual identity working name Z#D01) is a separate work stream; milestones M3-M5 redefined; M1 and M2 unchanged.",
+      "amends": ["ADR-013", "ADR-014"],
+      "interpretation_to_confirm_with_the_maintainer": "\"use the same principle as rvt-mcp to get past the guard rails\" was read as: build the guard rails into the server (annotations, receipts, policy, generated allow-list) so that the client-side hooks and manual confirmations become unnecessary — not as removing protections."
+    }
+  ],
+  "roadmap": {
+    "M1": "unchanged (read-only end to end, six audit presets at parity, install claude, activity card) — plan in docs/plans/m1-read-only/",
+    "M2": "guarded writes + change receipts and record_change",
+    "M3": "typed library wave 1 (template-centric), survey, batch, read-only mode by annotation, generated allow-list, result_ref",
+    "M4": "C# (Roslyn) under the same guard, baked commands with ribbon slots, multi-instance, exports, MCP prompts",
+    "M5": "ribbon and visual identity work stream (own product/design/slice gates)",
+    "v1.0.0": "M1-M3 + installer, CI, self-tests, ADR-014 benchmark"
+  },
+  "estimates_days": {
+    "M1_minimal_connected_get_context_run_query": "11-12",
+    "M1_complete_with_presets_and_card": "17",
+    "M2": "13",
+    "M3_M4_M5": "not estimated yet; to be gated one at a time (one firm commitment at a time)"
+  },
+  "next_actions_ordered": [
+    {"n": 1, "action": "Close the engine gaps: __import__ guard, stdlib subset, timeout invariant in Run, AST except-narrowing, bounded stdout", "where": "addin/src/Zenrvt.Scripting", "when": "M1 tranche 3 at the latest"},
+    {"n": 2, "action": "Rewrite ADR-002/004/008 for the pipe transport; keep SECURITY.md and README truthful (status note added on 2026-10-09)", "where": "docs/", "when": "before M1 tranche 2"},
+    {"n": 3, "action": "Produce SHA256SUMS.txt in Stage and add a freshness check (dist vs installed) to install.ps1; reinstall the add-in", "where": "addin/, install.ps1", "when": "M1 tranche 6"},
+    {"n": 4, "action": "Configure the git remote (private first) and run the CI once; fix the two clean-room hits", "where": "repository", "when": "now"},
+    {"n": 5, "action": "Write the M3 product gate: list of typed tools wave 1 with their annotations, adopting rvt-mcp's naming where compatible, with Apache-2.0 attribution for adapted schemas", "where": "docs/plans/m3-typed-library/", "when": "after M2"},
+    {"n": 6, "action": "Open the UI work stream (ribbon, icons, history window, visual identity Z#D01) with its own product gate; do not block M1-M2", "where": "docs/plans/ui-ribbon/", "when": "in parallel, design only"},
+    {"n": 7, "action": "Re-run the 12 scenarios against the pyRevit extension and rvt-mcp with a zenrvt build at the end of M2, then of M3; publish docs/benchmark/<date>-comparison.md", "where": "docs/benchmark/", "when": "end of M2"}
+  ],
+  "open_questions_for_the_maintainer": [
+    "Exact meaning and assets of the visual identity \"Z#D01\" (palette, icon style, typography) — needed to open the UI work stream",
+    "Adopt rvt-mcp's public tool names verbatim (revit_<verb>_<noun>) for client-side compatibility, or zenrvt's own namespace?",
+    "Port selected rvt-mcp handlers under Apache-2.0 attribution, or re-implement from the schemas only?",
+    "Should the maintainer's private client-side hook be retired once the server-side guard rails ship, or kept as belt and braces?"
+  ],
+  "files_touched_by_this_handoff": [
+    "docs/DECISIONS.md (ADR-026 appended)",
+    "docs/benchmark/2026-10-09-comparison.md (new)",
+    "docs/handoff/2026-10-09-audit-handoff.json (new)",
+    "README.md (status, roadmap)",
+    "SECURITY.md (implementation-status note)",
+    "CHANGELOG.md (Unreleased)",
+    "docs/plans/m1-read-only/00-status.md (one line under deferred decisions)"
+  ]
+}

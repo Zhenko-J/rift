@@ -1,0 +1,38 @@
+{
+  "scheme": "mac = HMAC-SHA256(secret, 'RIFT/1|' + ts + '|' + nonce + '|' + sha256_hex(body)); proof = HMAC-SHA256(secret, mac + '|' + sha256_hex(response_body))",
+  "vectors": [
+    {
+      "name": "empty body",
+      "secret_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "ts": 1700000000,
+      "nonce": "00000000000000000000000000000000",
+      "body": "",
+      "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mac": "9401982252a4a3a8a66100ebeeade0443b9002142477bf5999d968e2d7fa22d1",
+      "response_body": "{\"v\":\"2.0\",\"pid\":1}",
+      "proof": "a8550f16d7d78993e1823ed9ac1d79af0dad0f0aef29c7bcfe4ea6a15a70c486"
+    },
+    {
+      "name": "context request",
+      "secret_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+      "ts": 1760000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "body": "{\"v\":\"2.0\",\"id\":\"r1\",\"op\":\"context\",\"timeout_s\":30,\"args\":{}}",
+      "body_sha256": "fd3c6100013ff9a73d4eeb1fbb9baff1703a914e9628c54fa4d2203f2b20948e",
+      "mac": "42a101687df1e445d6f6015af4d50b274f4f02c7549eb1f26d5eec6134faccd0",
+      "response_body": "{\"v\":\"2.0\",\"id\":\"r1\",\"status\":\"ok\",\"result\":{\"document\":{\"title\":\"Sample\"}}}",
+      "proof": "cca4b4bc8e82124df09598d14c1d229f729381e2ea5043913341f0dffb7eba52"
+    },
+    {
+      "name": "utf-8 body",
+      "secret_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ts": 1760000123,
+      "nonce": "fedcba9876543210fedcba9876543210",
+      "body": "{\"v\":\"2.0\",\"id\":\"r2\",\"op\":\"run\",\"args\":{\"title\":\"élévation 😀\"}}",
+      "body_sha256": "8bddc33f505915f557f40c469d8e5483f4df77af2da68cfee01f2cd29175618a",
+      "mac": "ff232dd9af4f1a25167b0bd297b63b4000c379085b6dbe9d4b2e2043b4fe111b",
+      "response_body": "{\"v\":\"2.0\",\"id\":\"r2\",\"status\":\"error\",\"error\":{\"code\":\"PAUSED\",\"message\":\"en pause\"}}",
+      "proof": "044ade78e4a274c3c2c6deeee6be1fa0bb3ea637530e34dc50a817b997b463ae"
+    }
+  ]
+}

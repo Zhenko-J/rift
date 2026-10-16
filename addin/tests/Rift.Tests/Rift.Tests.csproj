@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- xUnit, no Revit. References Core and Scripting only (ADR-021). -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Rift.Tests</RootNamespace>
+    <!-- WPF for the ribbon icons, compiled here from Rift.Revit's source (Rift.Revit itself needs the Revit API). -->
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Rift.Core\Rift.Core.csproj" />
+    <ProjectReference Include="..\..\src\Rift.Scripting\Rift.Scripting.csproj" />
+    <ProjectReference Include="..\..\src\Rift.Ui\Rift.Ui.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\Rift.Revit\Ui\Icons.cs" Link="Linked\Icons.cs" />
+    <None Include="..\..\..\shared\schemas\test-vectors\hmac.json" Link="test-vectors\hmac.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\docs\PROTOCOL.md" Link="docs\PROTOCOL.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

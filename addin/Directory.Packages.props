@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Revit API reference assemblies (build-time only, never redistributed). One pair of lines per supported year. -->
+    <PackageVersion Include="Nice3point.Revit.Api.RevitAPI" Version="2026.3.0" />
+    <PackageVersion Include="Nice3point.Revit.Api.RevitAPIUI" Version="2026.3.0" />
+    <!-- Embedded script engine (ADR-016). -->
+    <PackageVersion Include="IronPython" Version="3.4.2" />
+    <PackageVersion Include="IronPython.StdLib" Version="3.4.2" />
+    <!-- Build-time analyzers. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4" />
+    <!-- Tests. -->
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.0.2" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+  </ItemGroup>
+</Project>

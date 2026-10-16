@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Development host: the real listener with a fake dispatcher, exercised by the real CPython client in CI (ADR-021). Not distributed. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Rift.PipeHost</RootNamespace>
+    <!-- A console tool may use the console. -->
+    <NoWarn>$(NoWarn);RS0030</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Rift.Core\Rift.Core.csproj" />
+    <ProjectReference Include="..\..\src\Rift.Scripting\Rift.Scripting.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,91 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  privacy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks (secrets + generic privacy patterns)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: clean-room guard (ADR-011) — no pyRevit reference in source
+        run: |
+          if grep -rniE 'pyrevit' addin server shared skills rules --include='*.cs' --include='*.py' --include='*.csproj' --include='*.props' --include='*.json' --include='*.yaml' --include='*.yml' --include='*.md' 2>/dev/null | grep -v 'ADR-011'; then
+            echo "::error::pyRevit reference found in source (clean-room, ADR-011)"; exit 1
+          fi
+      - name: private terms (maintainer regex kept in a secret; skipped on forks)
+        if: ${{ secrets.PRIVATE_TERMS_REGEX != '' }}
+        env:
+          PRIVATE_TERMS_REGEX: ${{ secrets.PRIVATE_TERMS_REGEX }}
+        run: |
+          if git grep -I -n -E "$PRIVATE_TERMS_REGEX" -- . ':!.github/workflows/ci.yml'; then
+            echo "::error::private term found"; exit 1
+          fi
+
+  server:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: sync
+        run: uv sync --all-extras
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: pytest
+        run: uv run pytest -q
+      - name: schemas, permissions and generated tool listings are up to date
+        run: uv run rift-mcp schemas --check && uv run rift-mcp permissions --check && uv run rift-mcp tools --check && uv run python ../tools/gen_pamphlet.py --check
+
+  addin:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        revit: ["26"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: addin/global.json
+      - name: restore
+        run: dotnet restore addin/rift.sln
+      - name: build (no Revit installed — reference packages only)
+        run: dotnet build addin/rift.sln -c "Release R${{ matrix.revit }}" --no-restore
+      - name: test
+        run: dotnet test addin/tests/Rift.Tests -c "Release R${{ matrix.revit }}" --no-build --logger trx
+      - name: verify staged hashes (SHA256SUMS.txt covers every staged file, ADR-022)
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/verify_sha256sums.ps1 -Folder "addin/dist/20${{ matrix.revit }}/rift"
+      - name: staged add-in
+        uses: actions/upload-artifact@v4
+        with:
+          name: rift-addin-20${{ matrix.revit }}
+          path: addin/dist/20${{ matrix.revit }}
+          retention-days: 14
+
+  changelog:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: CHANGELOG.md touched
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          if git diff --quiet origin/${{ github.base_ref }}...HEAD -- CHANGELOG.md; then
+            echo "::error::add a line under Unreleased in CHANGELOG.md (or label the PR no-changelog)"; exit 1
+          fi
