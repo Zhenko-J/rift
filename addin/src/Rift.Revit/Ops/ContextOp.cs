@@ -1,6 +1,7 @@
 // Copyright 2026 Zhenko-J. Licensed under the Apache License, Version 2.0.
 using System;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
 
@@ -17,7 +18,7 @@ namespace Rift.Revit.Ops;
 
 /// <summary>
 /// <c>op: context</c>: Revit version and build, the active document (title, path, state, class of ADR-009), the open
-/// documents, the write policy the active document would get (M2) and the state of the script engine. Selection, levels and coexistence come later.
+/// documents, the write policy the active document would get (M2) and the state of the script engine and the other assistant add-ins loaded (ADR-019). Selection and levels come later.
 /// </summary>
 internal sealed class ContextOp : IOperationHandler
 {
@@ -63,7 +64,21 @@ internal sealed class ContextOp : IOperationHandler
             ["document"] = active is null ? null : Describe(active, active, _config()),
             ["documents"] = documents,
             ["policy"] = Policy(active, _config()),
+            ["coexistence"] = CoexistenceOf(_config()),
             ["engine"] = _engineState(),
+        };
+    }
+
+    /// <summary>ADR-019: pyRevit and other assistant add-ins loaded in this Revit, and whether changes are kept anyway.</summary>
+    private static JsonObject CoexistenceOf(RiftConfig config)
+    {
+        CoexistenceReport report = Coexistence.Detect(RevitRunHost.LoadedAssemblyNames(), config.AgentPatterns);
+        return new JsonObject
+        {
+            ["pyrevit_loaded"] = report.PyRevitLoaded,
+            ["other_agents"] = new JsonArray(report.OtherAgents.Select(a => (JsonNode?)JsonValue.Create(a)).ToArray()),
+            ["coexist_with_other_agents"] = config.CoexistWithOtherAgents,
+            ["changes_kept"] = !report.OtherAgentActive || config.CoexistWithOtherAgents,
         };
     }
 

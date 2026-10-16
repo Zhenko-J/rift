@@ -179,6 +179,16 @@ public sealed class RunQueryOp : IOperationHandler
         {
             throw new OperationException(ErrorCodes.NoDocument, "no active document", refused: true);
         }
+        // ADR-019: another assistant add-in in the same Revit could act outside these guards. A dry run keeps nothing and
+        // still runs; a change is not kept while such an add-in is loaded, unless config.json allows it.
+        if (!dryRun && target.Coexistence is { OtherAgentActive: true } coexistence && !target.CoexistAllowed)
+        {
+            throw new OperationException(ErrorCodes.AgentConflict,
+                "another assistant add-in is loaded in this Revit (" + string.Join(", ", coexistence.OtherAgents)
+                + "): changes are not kept while it is (ADR-019); dry runs still work. Unload it, or set coexist_with_other_agents in config.json",
+                new JsonObject { ["other_agents"] = new JsonArray(coexistence.OtherAgents.Select(a => (JsonNode?)JsonValue.Create(a)).ToArray()) },
+                refused: true);
+        }
         PolicyDecision policy = WritePolicy.Decide(target.DocumentClass, requested, allowReference);
         if (policy.Refused)
         {

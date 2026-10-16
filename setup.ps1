@@ -22,6 +22,9 @@
   Does not set up nor register the server (add-in only).
 .PARAMETER NoRegister
   Sets up the server but does not run `claude mcp add`; prints the configuration block for any MCP client instead.
+.PARAMETER WithPermissions
+  Also merges RIFT's permission rules into the Claude Code settings of the same scope (reads allowed, scripts and
+  writes asked first). A backup of the settings file is written first; other rules are kept.
 .EXAMPLE
   pwsh -File setup.ps1
   pwsh -File setup.ps1 -CheckOnly
@@ -35,7 +38,8 @@ param(
     [switch]$CheckOnly,
     [switch]$SkipAddin,
     [switch]$SkipServer,
-    [switch]$NoRegister
+    [switch]$NoRegister,
+    [switch]$WithPermissions
 )
 
 $ErrorActionPreference = 'Stop'
@@ -164,6 +168,12 @@ else {
         }
         Write-Ok 'registered as "rift"'
     }
+    if ($WithPermissions) {
+        Write-Note "merging the permission rules into the Claude Code settings ($Scope scope)"
+        & uv run --directory $server --quiet rift-mcp permissions --install --scope $Scope
+        if ($LASTEXITCODE -ne 0) { Stop-Setup 'the permission rules could not be merged.' 'Read the message above; the settings file was left as it was.' }
+        Write-Ok 'permission rules merged (a backup of the previous settings file was kept)'
+    }
 }
 
 # ── 6. verify ──────────────────────────────────────────────────────────────────────────────
@@ -183,9 +193,14 @@ if (-not $SkipServer) {
 Write-Step '7/7' 'Next steps'
 Write-Host '    1. Start Revit. The add-in is not code-signed yet: answer "Always Load" once.'
 Write-Host '    2. In the NORN tab (RIFT creates it), RIFT panel: hover "server on" and "status", click "status".'
-Write-Host '    3. Recommended: install the permission rules so that reads run freely and every write asks first:'
-Write-Host '         uv run --directory server rift-mcp permissions --format claude'
-Write-Host '       and merge the "allow" and "ask" lists into the "permissions" section of your Claude Code settings.'
+if ($WithPermissions) {
+    Write-Host '    3. Permission rules are in place: reads run freely, scripts and writes ask first.'
+}
+else {
+    Write-Host '    3. Recommended: install the permission rules so that reads run freely and every script or write asks first:'
+    Write-Host '         uv run --directory server rift-mcp permissions --install'
+    Write-Host '       (or run setup.ps1 again with -WithPermissions). rift-mcp doctor tells whether they are in place.'
+}
 Write-Host '    4. Work on a copy of your model whose file name contains SANDBOX: RIFT refuses writes anywhere else.'
 Write-Host '    5. In your MCP client, ask: "Use rift: get_context". Then read INSTALL.md, section "First session".'
 Write-Host ''

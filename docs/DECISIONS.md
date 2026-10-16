@@ -126,6 +126,8 @@ Status: accepted (revised 2026-10-08; the first version relied on pyRevit's IPY2
 
 ## ADR-019 — Coexistence with the pyRevit agent runtime
 
+Amended 2026-10-16 (P1 of the benchmark), implemented: the default `agent_patterns` are `RvtMcp*`, `revit_mcp*`, `RevitMCP*` and `*mcp-server-for-revit*` (the broad `*Agent*` would match unrelated assemblies); only changes that would be kept are refused with `AGENT_CONFLICT`, dry runs still run; `get_context.coexistence` also says whether changes are kept. Listening endpoints of other add-ins are not probed.
+
 **Decision.** All event subscriptions are per run (armed in `Execute`, removed in `finally`). `get_context` reports `coexistence` — `pyrevit_loaded` (an assembly named `pyRevitLoader*`/`pyRevitLabs*` in the process), `other_agents` (loaded assemblies matching configurable patterns, by default `*Agent*`, `RvtMcp*`, `revit_mcp*`) and, on the server side, other listening endpoints owned by the Revit process; `run_modify` is refused with `AGENT_CONFLICT` when another agent is active unless `coexist_with_other_agents = true`. Documentation: one Revit agent per session.
 
 ## ADR-021 — Assembly isolation and solution layout (.NET add-in)

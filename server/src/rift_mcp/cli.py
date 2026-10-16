@@ -49,7 +49,13 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument(
         "--print", dest="print_only", action="store_true", help="print the command, do not run it"
     )
+    install.add_argument(
+        "--with-permissions",
+        action="store_true",
+        help="also merge the permission rules into the Claude Code settings of the same scope",
+    )
 
+    listings: dict[str, argparse.ArgumentParser] = {}
     for name, help_text in (
         ("tools", "the tool catalogue (README table, docs/pamphlet/tools.json)"),
         ("permissions", "Claude Code permission rules of the shipped tools"),
@@ -59,6 +65,19 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--format", choices=("json", "md", "claude"), default=None)
         p.add_argument("--check", action="store_true", help="fail when the committed file is stale")
         p.add_argument("--write", action="store_true", help="update the committed file in place")
+        listings[name] = p
+    listings["permissions"].add_argument(
+        "--install",
+        action="store_true",
+        help="merge the rules into a Claude Code settings file (backup first, other rules kept)",
+    )
+    listings["permissions"].add_argument(
+        "--scope",
+        default="user",
+        choices=("user", "project", "local"),
+        help="user: ~/.claude/settings.json; project: .claude/settings.json; "
+        "local: .claude/settings.local.json",
+    )
 
     sub.add_parser("doctor", help="list the Revit instances seen and the one that would be used")
 
@@ -87,7 +106,9 @@ def main(argv: list[str] | None = None) -> int:
 
         return main_serve()
     if args.command == "install":
-        return install_command(args.scope, print_only=args.print_only)
+        return install_command(
+            args.scope, print_only=args.print_only, with_permissions=args.with_permissions
+        )
     if args.command == "tools":
         return listing_command("tools", args.format or "md", check=args.check, write=args.write)
     if args.command == "permissions":
@@ -95,6 +116,8 @@ def main(argv: list[str] | None = None) -> int:
         if fmt != "claude":
             print("permissions: only --format claude is supported", file=sys.stderr)
             return 2
+        if args.install:
+            return permissions_install(args.scope)
         return listing_command("permissions", fmt, check=args.check, write=args.write)
     if args.command == "schemas":
         return listing_command("schemas", args.format or "json", check=args.check, write=args.write)
@@ -108,12 +131,45 @@ def main(argv: list[str] | None = None) -> int:
     return 2
 
 
-def install_command(scope: str, *, print_only: bool) -> int:
+def install_command(scope: str, *, print_only: bool, with_permissions: bool = False) -> int:
     from .install import install_claude, render
 
     report = install_claude(scope, print_only=print_only)
     sys.stdout.write(render(report))
-    return 0 if report.ok else 1
+    if not report.ok:
+        return 1
+    if with_permissions and not print_only:
+        # `claude mcp add` scopes map to the settings files:
+        # user → ~/.claude, local and project → .claude/.
+        return permissions_install(scope)
+    return 0
+
+
+def permission_rules() -> dict[str, list[str]]:
+    from .catalog import render_permissions_claude, to_document
+
+    rules: dict[str, list[str]] = json.loads(render_permissions_claude(to_document()))[
+        "permissions"
+    ]
+    return rules
+
+
+def permissions_install(scope: str) -> int:
+    """Merges the generated rules into the Claude Code settings of ``scope``.
+
+    A backup is written first and the file is replaced atomically."""
+    from .settings import install, settings_path
+
+    path = settings_path(scope)
+    try:
+        report = install(path, permission_rules())
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"permissions not installed: {path}: {exc}", file=sys.stderr)
+        return 1
+    out = report.to_dict()
+    out["result"] = "updated" if report.written else "already up to date"
+    print(json.dumps(out, indent=2))
+    return 0
 
 
 def listing_command(kind: str, fmt: str, *, check: bool, write: bool) -> int:
@@ -217,6 +273,12 @@ def doctor() -> int:
             )
     claude = shutil.which("claude")
     report["claude_cli"] = claude or "not on PATH (rift-mcp install claude --print)"
+    # Whether code and writes ask before running in this user's Claude Code settings
+    # (P1 of the 2026-10-16 benchmark, ADR-030 §3).
+    from .settings import SCOPES as SETTINGS_SCOPES
+    from .settings import audit, settings_path
+
+    report["permissions"] = audit([settings_path(s) for s in SETTINGS_SCOPES])
     print(json.dumps(report, indent=2))
     return 0 if report["target"] else 1
 

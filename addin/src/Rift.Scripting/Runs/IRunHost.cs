@@ -101,7 +101,10 @@ public sealed record GuardReport(
 public sealed record OtherDocumentWrite(string Title, int Transactions);
 
 /// <summary>The document a run is aimed at, as seen on the API thread just before the run.</summary>
-public sealed record RunTarget(object UiApp, object App, object? UiDoc, object? Doc, string? Title, string? Path, string? DocumentClass);
+/// <param name="Coexistence">Other assistant add-ins loaded in Revit (ADR-019); null when the host cannot tell.</param>
+/// <param name="CoexistAllowed"><c>coexist_with_other_agents</c> from config.json: keep changes even when another agent is loaded.</param>
+public sealed record RunTarget(object UiApp, object App, object? UiDoc, object? Doc, string? Title, string? Path, string? DocumentClass,
+    Rift.Core.Policy.CoexistenceReport? Coexistence = null, bool CoexistAllowed = false);
 
 /// <summary>Host services for one run, created on the API thread (Revit: from the dispatcher's UIApplication).</summary>
 public interface IRunHost

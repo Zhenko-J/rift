@@ -69,7 +69,7 @@ RIFT is **not**:
 | M3: typed library, wave 1 | 50 typed tools, `survey`, `batch`, `result_ref`, `model_audit` and `pre_issue_check` prompts, `rift://session/context` resource | Implemented. Accepted 2026-10-16 with every domain exercised on a SANDBOX copy. Four defects found during acceptance were fixed in the same commit. |
 | M4: free code wave 2 and operations | C# (Roslyn) under the same guard, baked commands, several Revit instances (`list_targets`/`switch_target`), exports, document life cycle, UI tools, `getting_started` prompt | Designed, not implemented (18 tools listed as `designed` below) |
 | M5: ribbon and in-Revit UI | Pause button, tooltips, Status window, History window with receipts, tool catalogue | Tranche 1 implemented and accepted in Revit on 2026-10-16: the `server on` / `paused` toggle (ten calls refused with `PAUSED`, none executed), tooltips and long descriptions on every button, the activity card in the project's visual style. The Status and History windows, the card switch and the tool catalogue are planned in [`docs/plans/ui-ribbon/`](docs/plans/ui-ribbon/). |
-| v1.0.0 | M1–M3, installer, CI, self-test, benchmark | **Not released.** Blocked on the P1 items of the 2026-10-16 benchmark that are still open: deferred code and file-system access from `run_query`, the `ask` rules, coexistence detection. |
+| v1.0.0 | M1–M3, installer, CI, self-test, benchmark | **Not released.** Blocked on the two P1 items of the 2026-10-16 benchmark that are still open: deferred code and file-system access from `run_query`. |
 
 Versions at HEAD: `rift-mcp` 0.0.1, add-in 0.1.0, wire protocol 2.0. Acceptance records (in French, the maintainer's working language) are in `docs/plans/m1-read-only/00-status.md`, `docs/plans/m2-guarded-writes/00-status.md` and `docs/plans/m3-typed-library/00-status.md`. Progress is in [CHANGELOG.md](CHANGELOG.md).
 
@@ -352,8 +352,8 @@ The [2026-10-16 benchmark](docs/benchmark/2026-10-16-comparison.md) tested the c
 | High | **`run_query` can reach the file system.** The `System` namespace given to scripts is not filtered: a `System.IO` write from a "read-only" query succeeded. `open()` is available, and `Environment.Exit` and process APIs are reachable (static finding). | measured (file write) | Same as above: `run_query` is arbitrary code execution with your rights. |
 | Medium | **Misleading outcome on writes into another document.** A `run_modify` script that wrote into a non-active document had that write rolled back, but the answer said `outcome: committed` with an empty receipt. | fixed after the benchmark: the run is never kept and answers `OTHER_DOCUMENT_WRITE`, `outcome: rolled_back`, with `other_documents` | — |
 | Medium | **A `run_query` that opens a document** leaves it open: a rollback cannot close a document. | partly fixed: the run now says so (`documents_left_open`, `blocked: open_document`) and a modify run is not kept; the call itself is not refused yet | Do not open documents from scripts; this belongs to M4's `open_document`. |
-| Medium | **No confirmation rules installed by default.** `install claude` registers the server only. Whether `run_query`, `run_modify` and the typed writes ask first depends on your client's permission mode. | static | Install the generated rules ([INSTALL.md, section 4](INSTALL.md#4-recommended-settings)). |
-| Medium | **No coexistence check.** ADR-019's detection of other agent add-ins (`AGENT_CONFLICT`) is not implemented. Another MCP add-in loaded in the same Revit can bypass RIFT's guards. | measured in effect | Disable or restrict the other agent add-ins while you use RIFT. |
+| Medium | **Confirmation rules are not installed unless you ask.** `install claude` registers the server only; whether `run_query`, `run_modify` and the typed writes ask first depends on your client's permission mode. | fixed after the benchmark: `rift-mcp permissions --install` (or `install claude --with-permissions`, `setup.ps1 -WithPermissions`) merges them, and `rift-mcp doctor` says when scripts and writes do not ask | Install them ([INSTALL.md, section 4](INSTALL.md#4-recommended-settings)). |
+| Medium | **Other assistant add-ins in the same Revit** can act on the model outside RIFT's guards. | fixed after the benchmark (ADR-019): `get_context` reports them in `coexistence`, and a change is not kept while one is loaded (`AGENT_CONFLICT`; dry runs still work) unless `coexist_with_other_agents` is set | Unload the other add-in, or accept the risk with `coexist_with_other_agents: true`. |
 | Medium | The output sanitiser left Unicode TAG characters, zero-width joiners and a few other invisible format characters. | fixed after the benchmark: every format and private-use character, the TAG block, variation selectors and lone surrogates are removed | Treat model text as untrusted, as the prompts say. |
 | Medium | SANDBOX markers matched as substrings, so a file named `Copyright...` counted as a SANDBOX copy. A script can also edit `config.json` (through the file-system issue above). | markers fixed after the benchmark (delimited words, at least 4 characters); `config.json` stays writable by a script until the file-system issue is fixed | Choose distinctive markers in `config.json`. |
 | Medium | 11 typed writes that overwrite values were annotated `destructiveHint: false`. | fixed after the benchmark | — |
@@ -377,7 +377,8 @@ The benchmark's action list (section (e)) schedules all P1 items before v1.0.0. 
 | `reference_names` | `[]` | File names (with or without extension) of reference documents: writable only with `allow_reference: true` and Keep/Discard |
 | `start_timeout_s` | `30` | How long Revit has to start a job before `REVIT_BUSY` (clamped to 5–300) |
 | `developer` | `false` | Shows the developer-only **Probe Python** ribbon button |
-| `agent_patterns` | `[]` | Reserved for coexistence detection (ADR-019); not used yet |
+| `agent_patterns` | `RvtMcp*`, `revit_mcp*`, `RevitMCP*`, `*mcp-server-for-revit*` | Assembly name patterns of other assistant add-ins (ADR-019); matched case-insensitively, `*` and `?` as wildcards |
+| `coexist_with_other_agents` | `false` | Keep changes even while another assistant add-in is loaded (otherwise `AGENT_CONFLICT`; dry runs always work) |
 
 Example:
 
@@ -431,6 +432,7 @@ Start with `rift-mcp doctor`. Every failed call returns `{"ok": false, "error": 
 | `TARGET_CHANGED` | The pid was reused, or the pipe is served by another process, or the response proof failed | Call again. If it persists, run `doctor` and restart Revit. |
 | `TARGET_BUSY` | The pipe stayed busy for more than 2 s, or a job is still running | Retry shortly |
 | `LEASE_HELD` | Another client holds the 60-second lease (another assistant session, or `selftest` running alongside your client) | Close the other client or wait 60 s. **Status** shows the holder. |
+| `AGENT_CONFLICT` | Another assistant add-in is loaded in this Revit (listed in `other_agents`); RIFT does not keep changes while it is (ADR-019) | Unload it, or set `coexist_with_other_agents: true` in `config.json`. Dry runs still work. |
 | `UNAUTHORIZED` | The signature was refused (wrong secret, clock outside ±120 s, replayed nonce) | Restart the MCP server. After ten failures the add-in rotates its secret, and the client re-reads it once. |
 | `PROTOCOL_MISMATCH` | Server and add-in speak different major protocol versions | Rebuild both from the same commit |
 | `REVIT_BUSY` | Revit did not start the job within `start_timeout_s`; the message names the modal dialog when there is one | Close the dialog and call again. The cancelled job never runs later. |
@@ -484,10 +486,8 @@ The direction is set by ADR-026: one server that combines a typed, annotated too
 1. **Before v1.0.0 (P1 in the benchmark, still open):**
    - refuse deferred code (event subscriptions, `PostCommand`, updaters, opening documents) inside the add-in;
    - replace the raw `System` namespace with a narrow façade and remove `open`;
-   - make `install claude` install, and `doctor` check, the `ask` rules;
-   - implement coexistence detection with `AGENT_CONFLICT`.
 
-   Done after the benchmark: honest reports of writes into other documents, stripping of invisible format characters, delimited SANDBOX markers, accurate `destructiveHint` values, the Status text.
+   Done after the benchmark: permission rules installed on request and checked by `doctor`, coexistence detection with `AGENT_CONFLICT`, honest reports of writes into other documents, stripping of invisible format characters, delimited SANDBOX markers, accurate `destructiveHint` values, the Status text.
 2. **Next (P2):**
    - rewrite the server instructions and the `change` prompt for the typed library;
    - add enums and parameter descriptions on the M1/M2 tools;

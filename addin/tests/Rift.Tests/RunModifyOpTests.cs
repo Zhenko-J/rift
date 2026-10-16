@@ -13,6 +13,7 @@ using Xunit;
 using Rift.Core.Jobs;
 using Rift.Core.Journal;
 using Rift.Core.Logging;
+using Rift.Core.Policy;
 using Rift.Core.Protocol;
 using Rift.Core.Protocol.Ops;
 using Rift.Scripting;
@@ -128,10 +129,10 @@ public sealed class RunModifyOpTests : IClassFixture<EngineFixture>, IDisposable
 
     private sealed class Host : IRunHost
     {
-        public Host(string? documentClass, string? path, bool canAsk = true)
+        public Host(string? documentClass, string? path, bool canAsk = true, CoexistenceReport? coexistence = null, bool coexistAllowed = false)
         {
             Doc = new FakeDocument(Guard);
-            Target = new RunTarget(new object(), new object(), null, Doc, "PLAN_SANDBOX", path, documentClass);
+            Target = new RunTarget(new object(), new object(), null, Doc, "PLAN_SANDBOX", path, documentClass, coexistence, coexistAllowed);
             AskDialog = canAsk ? new FakeAsk() : null;
         }
 
@@ -337,6 +338,39 @@ public sealed class RunModifyOpTests : IClassFixture<EngineFixture>, IDisposable
         Assert.Equal(reason, r.Result["reason"]?.GetValue<string>());
         Assert.Equal(1, host.AskDialog.Asked);
         Assert.Equal(answer == AskResult.Keep, host.Guard.KeepAsked);
+    }
+
+    // ── ADR-019: another assistant add-in loaded ─────────────────────────────────────────────
+
+    private static readonly CoexistenceReport OtherAgent = new(false, new[] { "RvtMcp.Plugin" });
+
+    [Fact]
+    public void A_change_is_refused_with_agent_conflict_while_another_agent_is_loaded()
+    {
+        var host = new Host("sandbox", @"C:\w\PLAN_SANDBOX.rvt", coexistence: OtherAgent);
+        ResponseEnvelope r = Modify(Router(host).Router, ThreeChanges, new JsonObject { ["dry_run"] = false });
+        Assert.Equal(ResponseEnvelope.Refused, r.Status);
+        Assert.Equal(ErrorCodes.AgentConflict, r.Error!.Code);
+        Assert.Contains("RvtMcp.Plugin", r.Error.Message, StringComparison.Ordinal);
+        Assert.Equal("RvtMcp.Plugin", r.Result!["other_agents"]![0]!.GetValue<string>());
+        Assert.Equal(0, host.Guard.Armed);
+    }
+
+    [Fact]
+    public void A_dry_run_still_works_while_another_agent_is_loaded()
+    {
+        var host = new Host("sandbox", @"C:\w\PLAN_SANDBOX.rvt", coexistence: OtherAgent);
+        ResponseEnvelope r = Modify(Router(host).Router, ThreeChanges, new JsonObject());
+        Assert.Equal("rolled_back", r.Result!["outcome"]!.GetValue<string>());
+        Assert.Equal("dry_run", r.Result["reason"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Coexist_with_other_agents_keeps_the_change()
+    {
+        var host = new Host("sandbox", @"C:\w\PLAN_SANDBOX.rvt", coexistence: OtherAgent, coexistAllowed: true);
+        ResponseEnvelope r = Modify(Router(host).Router, ThreeChanges, new JsonObject { ["dry_run"] = false });
+        Assert.Equal("committed", r.Result!["outcome"]!.GetValue<string>());
     }
 
     [Fact]

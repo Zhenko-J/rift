@@ -66,13 +66,13 @@ Running `setup.ps1` again is safe: it rebuilds, reinstalls and registers again.
 
 ## 4. Recommended settings
 
-**Permission rules.** By default your client decides when to ask before a tool runs. RIFT ships a generated list that lets the 31 read tools run freely and asks before each of the 30 others (scripts, writes, history, job control). Print it:
+**Permission rules.** By default your client decides when to ask before a tool runs. RIFT ships a generated list that lets the 31 read tools run freely and asks before each of the 30 others (scripts, writes, history, job control). Merge it into your Claude Code settings:
 
 ```powershell
-uv run --directory server rift-mcp permissions --format claude
+uv run --directory server rift-mcp permissions --install
 ```
 
-and merge its `allow` and `ask` lists into the `permissions` section of your Claude Code settings (`~/.claude/settings.json`, or `.claude/settings.json` in a project). The same lists are in [`docs/pamphlet/permissions.claude.json`](docs/pamphlet/permissions.claude.json).
+`--install` adds RIFT's rules to `~/.claude/settings.json` (`--scope project` or `--scope local` for `.claude/settings.json` or `.claude/settings.local.json` in the current folder), moves a RIFT rule that sits in the wrong list, keeps every other rule, and writes a backup of the file first. `setup.ps1 -WithPermissions` does the same during installation. `rift-mcp doctor` reports, under `permissions`, whether scripts and writes ask first. The rules alone: `rift-mcp permissions --format claude` or [`docs/pamphlet/permissions.claude.json`](docs/pamphlet/permissions.claude.json).
 
 **Work on a SANDBOX copy.** RIFT refuses every write unless the active file name contains a SANDBOX marker as a separate word (by default `SANDBOX`, `JETABLE`, `_INJ_`, `TESTRUN`, `COPIE`, `COPY` or `SCRATCH`; see `sandbox_markers` in the [README, Configuration](README.md#configuration)). Save a copy of your model or template as, for example, `MyTemplate_SANDBOX.rte` and work in that copy. Even there, every write is a dry run unless the assistant asks to keep it, and a kept change is one undo entry named `Agent: <title>`.
 
@@ -137,6 +137,7 @@ uv run --directory server rift-mcp install claude
 | `TARGET_LOST` once after restarting Revit | the server remembered the previous Revit | ask again: the second call finds the new instance |
 | `LEASE_HELD` | another assistant session holds RIFT | wait about a minute, or close the other session |
 | `PAUSED` | you paused RIFT in Revit | click the button again in the RIFT panel |
+| `AGENT_CONFLICT` | another assistant add-in is loaded in Revit; RIFT does not keep changes while it is | unload it, or set `"coexist_with_other_agents": true` in `%LOCALAPPDATA%\rift\config.json` and restart Revit |
 | `SANDBOX_REQUIRED` | a write on a file that is not a SANDBOX copy | save a SANDBOX copy and make it the active document |
 | `REVIT_BUSY` | a Revit dialog is open | close the dialog and ask again |
 

@@ -25,7 +25,8 @@ public sealed record RiftConfig(
     IReadOnlyList<string> ReferenceNames,
     IReadOnlyList<string> AgentPatterns,
     int StartTimeoutS,
-    bool Developer = false)
+    bool Developer = false,
+    bool CoexistWithOtherAgents = false)
 {
     public const int MinStartTimeoutS = 5;
     public const int MaxStartTimeoutS = 300;
@@ -34,7 +35,7 @@ public sealed record RiftConfig(
         new[] { "SANDBOX", "JETABLE", "_INJ_", "TESTRUN", "COPIE", "COPY", "SCRATCH" };
 
     public static RiftConfig Default { get; } =
-        new(true, DefaultSandboxMarkers, Array.Empty<string>(), Array.Empty<string>(), 30);
+        new(true, DefaultSandboxMarkers, Array.Empty<string>(), Policy.Coexistence.DefaultAgentPatterns, 30);
 
     /// <summary>Reads the file; returns <see cref="Default"/> (and logs why) when it is absent or not a JSON object.</summary>
     public static RiftConfig Load(string path, FileLog? log = null)
@@ -79,7 +80,8 @@ public sealed record RiftConfig(
             Strings(obj, "reference_names", d.ReferenceNames, log),
             Strings(obj, "agent_patterns", d.AgentPatterns, log),
             Math.Clamp(Int(obj, "start_timeout_s", d.StartTimeoutS, log), MinStartTimeoutS, MaxStartTimeoutS),
-            Bool(obj, "developer", d.Developer, log));
+            Bool(obj, "developer", d.Developer, log),
+            Bool(obj, "coexist_with_other_agents", d.CoexistWithOtherAgents, log));
     }
 
     /// <summary>Writes the file atomically (temp file + move).</summary>
@@ -93,6 +95,7 @@ public sealed record RiftConfig(
             ["agent_patterns"] = new JsonArray(AgentPatterns.Select(s => (JsonNode?)JsonValue.Create(s)).ToArray()),
             ["start_timeout_s"] = StartTimeoutS,
             ["developer"] = Developer,
+            ["coexist_with_other_agents"] = CoexistWithOtherAgents,
         };
         string? dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir))
