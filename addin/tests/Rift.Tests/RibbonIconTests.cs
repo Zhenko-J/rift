@@ -139,8 +139,8 @@ public sealed class RibbonIconTests
             // A command (directly or through RelayCommand), or the availability class named by AvailabilityClassName.
             Assert.Matches(@"public sealed class " + command + @"\s*:\s*(IExternalCommand|RelayCommand|IExternalCommandAvailability)\b", bootstrap);
         }
-        int buttons = Regex.Matches(ribbon, "new PushButtonData\\(").Count;
-        int images = Regex.Matches(ribbon, @"^\s*SetImages\(\w+, Icons\.\w+, [\w.]+\);", RegexOptions.Multiline).Count;
+        int buttons = Regex.Count(ribbon, "new PushButtonData\\(");
+        int images = Regex.Count(ribbon, @"^\s*SetImages\(\w+, Icons\.\w+, [\w.]+\);", RegexOptions.Multiline);
         Assert.Equal(buttons, images);
         Assert.DoesNotContain("BuildRibbon", bootstrap, StringComparison.Ordinal);
     }
