@@ -45,6 +45,16 @@ internal static partial class Ribbon
     internal const string HistoryLong =
         "one line per call: time, tool, result, code and duration, with what a kept change added, modified or deleted\n"
         + "never the script text and never model values; the history is not kept once Revit closes";
+    internal const string CardOnText = "card\non";
+    internal const string CardOffText = "card\noff";
+    internal const string CardTip = "the small card that tells what the assistant just did";
+    internal const string CardLong =
+        "shows when an assistant connects and when each call ends, with the error code it received\n"
+        + "never the script text and never model values; remembered in config.json";
+    internal const string InboxTip = "commands the assistant proposed to freeze, waiting for you";
+    internal const string InboxLong =
+        "read each script, then accept or reject it; only an accepted command can run, and only while its script is unchanged\n"
+        + "an accepted command runs under the same guards as run_query and run_modify";
     internal const string ToolsTip = "the tools the assistant can call, and their risk";
     internal const string ToolsLong =
         "full pastille = shipped, hollow = planned; auto tools only read, ask tools need your approval in the assistant\n"
@@ -56,9 +66,10 @@ internal static partial class Ribbon
     private static double s_scale = 1.0;
     private static FileLog s_log = FileLog.Null;
     private static PushButton? s_toggle;
+    private static PushButton? s_card;
     private static bool s_paused;
 
-    public static void Build(UIControlledApplication app, string bootstrapPath, bool developer, FileLog log)
+    public static void Build(UIControlledApplication app, string bootstrapPath, bool developer, FileLog log, bool cardOn = true)
     {
         s_log = log;
         // Computed first: nothing between the panel's creation and its buttons may throw.
@@ -102,6 +113,28 @@ internal static partial class Ribbon
         };
         SetImages(history, Icons.History, ink);
         Add(panel, history, Icons.History);
+
+        var card = new PushButtonData(Brand.Id + ".card", cardOn ? CardOnText : CardOffText, bootstrapPath, "Rift.Addin.CardCommand")
+        {
+            ToolTip = CardTip,
+            LongDescription = CardLong,
+            AvailabilityClassName = Availability,
+        };
+        SetImages(card, Icons.Card, ink);
+        s_card = panel.AddItem(card) as PushButton;
+        if (s_card is not null)
+        {
+            s_buttons.Add((s_card, Icons.Card));
+        }
+
+        var inbox = new PushButtonData(Brand.Id + ".inbox", "inbox", bootstrapPath, "Rift.Addin.InboxCommand")
+        {
+            ToolTip = InboxTip,
+            LongDescription = InboxLong,
+            AvailabilityClassName = Availability,
+        };
+        SetImages(inbox, Icons.Inbox, ink);
+        Add(panel, inbox, Icons.Inbox);
 
         var tools = new PushButtonData(Brand.Id + ".tools", "tools", bootstrapPath, "Rift.Addin.ToolsCommand")
         {
@@ -162,6 +195,22 @@ internal static partial class Ribbon
         catch (Exception ex)
         {
             s_log.Write("ribbon: pause display failed: " + ex.Message);
+        }
+    }
+
+    /// <summary>Shows the activity card switch on its button. API or UI thread only; never throws.</summary>
+    public static void SetCard(bool on)
+    {
+        try
+        {
+            if (s_card is not null)
+            {
+                s_card.ItemText = on ? CardOnText : CardOffText;
+            }
+        }
+        catch (Exception ex)
+        {
+            s_log.Write("ribbon: card display failed: " + ex.Message);
         }
     }
 

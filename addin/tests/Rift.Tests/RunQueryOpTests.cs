@@ -170,6 +170,40 @@ public sealed class RunQueryOpTests : IClassFixture<EngineFixture>, IDisposable
     }
 
     [Fact]
+    public void A_csharp_query_runs_under_the_same_guard_and_journal()
+    {
+        using var csharp = new Rift.Scripting.CSharp.CSharpEngine(Rift.Scripting.CSharp.CSharpHostShape.Plain);
+        IScriptEngine e = _fixture.Engine;
+        var jobs = new JobTable(TimeSpan.FromMinutes(1));
+        var journal = new RunJournal(_dir, new RedactionContext("someone", "somehost"), TimeSpan.FromDays(14), FileLog.Null);
+        var router = new RequestRouter(
+            new IOperationHandler[] { new RunQueryOp(() => e, () => _host, journal, FileLog.Null, () => csharp), new JobOp(jobs) },
+            jobs, new Runner(), () => new TargetInfo(1, 1, null), FileLog.Null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(60));
+        var args = new JsonObject
+        {
+            ["script"] = "print(\"reading\"); return new { k = inputs[\"k\"], doc = doc != null };",
+            ["language"] = "csharp",
+            ["mode"] = "query",
+            ["title"] = "cs",
+            ["timeout_s"] = 30,
+            ["inputs"] = new JsonObject { ["k"] = 2 },
+        };
+        var body = new JsonObject { ["v"] = "2.0", ["id"] = "r", ["op"] = "run", ["timeout_s"] = 60, ["args"] = args };
+        ResponseEnvelope r = router.Handle(Encoding.UTF8.GetBytes(body.ToJsonString()), CancellationToken.None);
+        Assert.Equal("ok", r.Status);
+        Assert.Equal("csharp", r.Result!["language"]!.GetValue<string>());
+        Assert.Equal(2, r.Result["result"]!["k"]!.GetValue<long>());
+        Assert.True(r.Result["result"]!["doc"]!.GetValue<bool>());
+        Assert.Equal("reading", r.Result["stdout"]!.GetValue<string>().TrimEnd());
+        Assert.Equal((1, 1), (_host.Guard.Armed, _host.Guard.Disarmed));
+
+        args["script"] = "System.IO.File.Delete(\"x\"); return 1;";
+        ResponseEnvelope refused = router.Handle(Encoding.UTF8.GetBytes(body.ToJsonString()), CancellationToken.None);
+        Assert.Equal(ErrorCodes.ScriptError, refused.Error!.Code);
+        Assert.StartsWith("CompileError", refused.Error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_disguised_write_is_rolled_back_and_reported_as_write_in_query()
     {
         ResponseEnvelope r = Run(Router(), "doc.Commit()\ndoc.Save()\nresult = 'done'\n");

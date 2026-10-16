@@ -229,6 +229,17 @@ public sealed class ActivityTests
         public void OpenSession()
         {
         }
+
+        public Rift.Core.Baked.BakedStore Baked { get; } =
+            new(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "rift-inbox-" + Guid.NewGuid().ToString("N")));
+
+        public System.Collections.Generic.IReadOnlyList<Rift.Core.Baked.BakedProposal> Proposals() => Baked.Proposals();
+
+        public System.Collections.Generic.IReadOnlyList<Rift.Core.Baked.BakedCommand> BakedCommands() => Baked.Commands();
+
+        public void AcceptBaked(string id) => Baked.Accept(id);
+
+        public void RejectBaked(string id) => Baked.Reject(id);
     }
 
     private static void OnSta(Action action)
@@ -262,6 +273,8 @@ public sealed class ActivityTests
             var host = new FakeHost();
             host.Log.Upsert(Rec("r1", "ok"));
             host.Log.Upsert(Rec("r2", "error", ErrorCodes.Internal));
+            host.Baked.Propose("count_walls", "how many walls", "query", "result = 1");
+            host.Baked.Accept(host.Baked.Propose("tag_rooms", "tag rooms", "modify", "result = 2").Id);
             foreach (RiftWindowProbe w in new[]
             {
                 new RiftWindowProbe(new StatusWindow(host, IntPtr.Zero)),
@@ -269,6 +282,7 @@ public sealed class ActivityTests
                 new RiftWindowProbe(new ToolsWindow(ToolCatalog.Load(), IntPtr.Zero)),
                 new RiftWindowProbe(new SessionWindow(host, new SessionQuestion("claude-code 2.0", "PLAN", "unmarked", null), IntPtr.Zero)),
                 new RiftWindowProbe(new SessionWindow(host, new SessionQuestion("claude-code 2.0", null, null, null), IntPtr.Zero)),
+                new RiftWindowProbe(new InboxWindow(host, IntPtr.Zero)),
             })
             {
                 Assert.StartsWith("RIFT · ", w.Window.Title, StringComparison.Ordinal);

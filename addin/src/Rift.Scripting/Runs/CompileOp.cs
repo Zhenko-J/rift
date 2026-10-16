@@ -15,10 +15,12 @@ namespace Rift.Scripting.Runs;
 public sealed class CompileOp : IOperationHandler
 {
     private readonly Func<IScriptEngine> _engine;
+    private readonly Func<IScriptEngine>? _csharp;
 
-    public CompileOp(Func<IScriptEngine> engine)
+    public CompileOp(Func<IScriptEngine> engine, Func<IScriptEngine>? csharp = null)
     {
         _engine = engine;
+        _csharp = csharp;
     }
 
     public string Op => "compile";
@@ -29,7 +31,9 @@ public sealed class CompileOp : IOperationHandler
     {
         string script = RunArgs.Script(request);
         string language = RunArgs.Language(request);
-        IScriptEngine engine = _engine();
+        IScriptEngine engine = language == "csharp"
+            ? (_csharp ?? throw new OperationException(ErrorCodes.BadRequest, "C# scripts are not available in this host", refused: true))()
+            : _engine();
         CompileResult c = engine.Compile(script, "<agent-script>");
         var node = new JsonObject
         {

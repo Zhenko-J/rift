@@ -97,11 +97,11 @@ public sealed class SessionWindow : RiftWindow
 
     private Button Option(string verb, bool selected, Action choose)
     {
-        Button b = Z.GhostButton(selected ? "[" + verb + "]" : verb, () =>
+        Button b = Z.GhostButton(verb, () =>
         {
             choose();
             Refresh(true);
-        });
+        }, selected);
         b.Margin = new Thickness(0, 0, Theme.Size.Gutter, Theme.Size.Gutter);
         return b;
     }

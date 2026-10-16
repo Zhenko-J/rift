@@ -151,3 +151,24 @@ async def test_getting_started_names_the_safety_rules() -> None:
     text = result.messages[0].content.text  # type: ignore[union-attr]
     assert "SANDBOX" in text and "PAUSED" in text and "untrusted" in text
     assert text.endswith("help with: door schedules.")
+
+
+def test_a_typed_tool_error_carries_the_tool_message() -> None:
+    from rift_mcp.tools import typed
+
+    details = {"error": {"type": "ValueError", "message": "ValueError: view 'X' not found"}}
+    exc = typed.readable(RiftError("SCRIPT_ERROR", "ValueError at line 287", details))
+    assert exc.message == "ValueError: view 'X' not found"
+    assert exc.details == details
+    other = RiftError("TIMEOUT", "stopped")
+    assert typed.readable(other) is other
+
+
+async def test_export_skips_blank_rows(tmp_path: Path) -> None:
+    blank = json.loads(json.dumps(SCHEDULE))
+    blank["result"]["result"]["rows"] = [["", ""], ["D1", "900"], [None, " "]]
+    addin = FakeAddin()
+    addin.answer("lease", LEASE_OK)
+    addin.answer("tool", blank)
+    out = await ops.export_schedule_csv(_client(addin), "S", str(tmp_path))
+    assert (out["rows"], out["blank_rows_skipped"]) == (1, 2)

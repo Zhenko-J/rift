@@ -319,3 +319,30 @@ Status: accepted 2026-10-16 at the maintainer's request.
 5. **A permission profile for Claude Code.** `rift-mcp permissions --install --profile session` (and `setup.ps1 -WithPermissions -PermissionProfile session`) allows every RIFT tool in Claude Code, since the session window now carries the decision; the default profile `ask` is unchanged. `doctor` reports the profile.
 
 **Consequences.** One decision per session instead of one per action, taken where the assistant cannot forge it. With "active project · full auto" the assistant can keep changes in a real project without any dialog: the undo entry `Agent: <title>`, the receipts, History and the pause are then the user's controls, and saving remains theirs. The session profile also lets `run_query` and `run_modify` run free code without a Claude Code prompt; the read path's known escapes (README, known limitations) matter more with it.
+
+## ADR-034 — Baked commands: the assistant proposes, only the user accepts, in Revit
+
+Status: accepted 2026-10-16 (M4).
+
+**Context.** rvt-mcp's "toolbaker" turns a script into a command that can be run again by name. Running a stored script by name is convenient, but the stored script is free code: if the assistant could store and then run it, a name would hide what runs.
+
+**Decision.**
+1. `propose_baked_tool {name, description, mode: query|modify, script}` compiles the script (nothing is stored when it does not compile) and stores a proposal in `%LOCALAPPDATA%\rift\baked\inbox`. The assistant cannot accept it.
+2. The **inbox** button of the RIFT panel opens a window that shows every proposal with its whole script; the user accepts (the script is frozen in `baked\accepted\<name>.json` with its SHA-256) or rejects (deleted). The activity card tells when a proposal arrives.
+3. `run_baked_tool {name, inputs, dry_run, policy, expected_document}` runs an accepted command only while its script still has the recorded SHA-256 (`HASH_MISMATCH` otherwise), through exactly the path of `run_query` (mode query) or `run_modify` (mode modify: session, document policy, dry run by default, one undo entry `Agent: baked: <name>`). `list_baked_tools` lists commands and pending proposals.
+
+**Consequences.** A baked command is never less guarded than the script it came from, and what runs under a name is what the user read. The hash detects a file changed after acceptance; it does not protect against someone who can write both the script and its hash in the user's profile (the same trust boundary as the add-in's own files).
+
+## ADR-035 — C# scripts under the same guards, with their own timeout and allow-list
+
+Status: accepted 2026-10-16 (M4, ADR-026 §4).
+
+**Context.** C# is the Revit API's own language and what most Revit developers write. Free C# has no import guard and no trace hook: without care it could reach files, processes and the network, swallow a stop, recurse until Revit crashes, or leave code that runs after the guard.
+
+**Decision.**
+1. `language: "csharp"` on `run_query`, `run_modify` and `op: compile`. The script is the body of a method that returns its answer, with `doc, uidoc, uiapp, app, inputs, print, report_progress` in scope. It is parsed **alone** (it cannot close the wrapper or declare a type), then compiled by Roslyn (Microsoft.CodeAnalysis.CSharp 4.8, MIT) against the shared framework and the Revit API assemblies Revit loaded.
+2. **Allow-list** (checked on the syntax and on every bound symbol, its type, return type and parameters): the core of `System`, collections, LINQ, text, regular expressions, globalization and the Revit API namespaces. Refused: `goto`, `unsafe`, `fixed`, `stackalloc`, `dynamic`, `async`/`await`, attributes, preprocessor directives, the `__arglist` family, names starting with `__rift`, event subscriptions, `System.Environment`, `AppDomain`, `AppContext`, `Activator`, `GC`, `Console`, reflection beyond `typeof(T).Name`, `ExternalEvent` and `UpdaterRegistry`. Nothing of `System.IO`, `System.Diagnostics`, `System.Net`, `System.Reflection`, `System.Threading`, `System.Runtime.*` or `System.Linq.Expressions`.
+3. **Timeout** (the C# form of ADR-016): a check at the start of every loop body, local function, lambda and anonymous method throws once the deadline passed, the run was cancelled or the stack is nearly exhausted (no stack overflow); every `catch` gets the filter `when (__rift_ok())`, so a stop cannot be swallowed; after the run every check throws, so a delegate left behind does nothing.
+4. Every `Transaction`, `SubTransaction` and `TransactionGroup` the script creates is tracked and handed to the guard like the leftovers of a Python script. The assembly is loaded into a collectible context, unloaded after the run.
+
+**Consequences.** C# runs under the same read and write guards, journal, session and receipts as Python. Like Python, a single long call into a library (a huge LINQ query, a regular expression) is not interrupted until it returns. The allow-list is stricter than the Python import guard on purpose; it can be widened namespace by namespace with a test for each.

@@ -108,7 +108,9 @@ async def export_schedule_csv(
     if not isinstance(data, dict):
         raise RiftError("BAD_RESULT", "get_schedule_data returned no rows")
     columns = list(data.get("columns") or [])
-    rows = [list(r) for r in data.get("rows") or []]
+    every = [list(r) for r in data.get("rows") or []]
+    # Revit schedules show blank lines (between groups, or an empty body): not data.
+    rows = [r for r in every if any(str(c).strip() for c in r if c is not None)]
     path = root / (safe_file_name(str(data.get("schedule") or schedule)) + ".csv")
     if path.exists() and not overwrite:
         raise RiftError(
@@ -122,6 +124,7 @@ async def export_schedule_csv(
         "schedule": data.get("schedule"),
         "columns": len(columns),
         "rows": len(rows),
+        "blank_rows_skipped": len(every) - len(rows),
         "truncated": bool(data.get("truncated")),
         "target": out.get("target"),
     }

@@ -29,9 +29,9 @@ internal static class RunArgs
     public static string Language(RequestEnvelope request)
     {
         string language = String(request, "language") ?? "python";
-        if (!string.Equals(language, "python", StringComparison.Ordinal))
+        if (language is not ("python" or "csharp"))
         {
-            throw new OperationException(ErrorCodes.BadRequest, "language " + Sanitizer.Sanitize(language, 32) + " is not available (python only until M4)", refused: true);
+            throw new OperationException(ErrorCodes.BadRequest, "language " + Sanitizer.Sanitize(language, 32) + " is not available (python or csharp)", refused: true);
         }
         return language;
     }

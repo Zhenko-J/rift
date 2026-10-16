@@ -10,6 +10,8 @@
     <!-- Embedded script engine (ADR-016). -->
     <PackageVersion Include="IronPython" Version="3.4.2" />
     <PackageVersion Include="IronPython.StdLib" Version="3.4.2" />
+    <!-- C# scripts (ADR-035): compiled in memory, checked and rewritten before they run. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
     <!-- Build-time analyzers. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4" />
     <!-- Tests. -->

@@ -54,6 +54,10 @@ public sealed record CardContent(PastilleState State, string Label, string Aside
         ? new CardContent(PastilleState.Paused, "session", "answer the session window · changes wait until you do", null, null)
         : new CardContent(PastilleState.Done, "session", "session: " + choice.Text(), null, null);
 
+    /// <summary>The assistant proposed a baked command: it waits in the inbox (ADR-034).</summary>
+    public static CardContent Inbox(string name) =>
+        new(PastilleState.Running, "inbox", name + " proposed · review it in the RIFT inbox before it can run", null, null);
+
     /// <summary>The user resumed the server from the ribbon.</summary>
     public static CardContent Resumed() =>
         new(PastilleState.Done, "server", "resumed · the next call goes through", null, null);

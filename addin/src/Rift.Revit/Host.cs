@@ -1,5 +1,6 @@
 // Copyright 2026 Zhenko-J. Licensed under the Apache License, Version 2.0.
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -14,6 +15,7 @@ using Autodesk.Revit.UI;
 
 using Rift.Core;
 using Rift.Core.Activity;
+using Rift.Core.Baked;
 using Rift.Core.Config;
 using Rift.Core.Control;
 using Rift.Core.Discovery;
@@ -62,6 +64,7 @@ public sealed class Host : IDisposable, IUiHost
     private ActivityCard? _card;
     private readonly ActivityLog _activity = new();
     private readonly SessionGate _session = new();
+    private readonly BakedStore _baked = new(Path.Combine(s_root, "baked"));
     private string _sessionClient = "assistant";
     private (string? Path, string? Title, string? Class) _sessionProject;
     private IntPtr _mainWindow;
@@ -89,7 +92,7 @@ public sealed class Host : IDisposable, IUiHost
         _config = RiftConfig.Load(Path.Combine(s_root, "config.json"), _log);
         try
         {
-            Ribbon.Build(app, bootstrapPath, _config.Developer, _log);
+            Ribbon.Build(app, bootstrapPath, _config.Developer, _log, _config.ActivityCard);
         }
         catch (Exception ex)
         {
@@ -153,24 +156,36 @@ public sealed class Host : IDisposable, IUiHost
         };
         Func<IScriptEngine> engine = Engine;
         Func<IRunHost> runHost = () => RevitRunHost.Current(() => _config, _log, SessionFor);
-        var runQuery = new RunQueryOp(engine, runHost, _journal, _log);
+        // ADR-035: C# scripts compile against the Revit API assemblies Revit itself loaded.
+        var csharp = new Lazy<Rift.Scripting.CSharp.CSharpEngine>(() => new Rift.Scripting.CSharp.CSharpEngine(
+            Rift.Scripting.CSharp.CSharpHostShape.Revit(new[] { typeof(Document).Assembly.Location, typeof(UIDocument).Assembly.Location })));
+        Func<IScriptEngine> csharpEngine = () => csharp.Value;
+        var runQuery = new RunQueryOp(engine, runHost, _journal, _log, csharpEngine);
         var router = new RequestRouter(
             new IOperationHandler[]
             {
                 new LeaseOp(_lease),
                 new JobOp(jobs),
                 new ContextOp(_version, () => _config, EngineState, SessionFor, SessionState),
-                new CompileOp(engine),
+                new CompileOp(engine, csharpEngine),
                 runQuery,
                 new ToolOp(new IToolHandler[]
                 {
                     new AuditOp(PresetCatalog.Default, runQuery, _journal),
                     new HistoryOp(_journal, runHost),
+                    new DocumentOp(_log),
+                    new Rift.Scripting.Baked.BakedOp(_baked, runQuery, engine),
+                    new ExportOp(new[] { s_root, Path.GetDirectoryName(typeof(Host).Assembly.Location) ?? s_root }, _log),
                     new TypedToolOp(TypedToolCatalog.Default, runQuery),
                 }),
             },
             jobs, _dispatcher, () => new TargetInfo(pid, _secrets.Generation, null), _log,
             startTimeout: TimeSpan.FromSeconds(_config.StartTimeoutS), lease: _lease, pause: _pause);
+        _baked.Proposed += p =>
+        {
+            _log.Write("baked command proposed: " + p.Name + " (" + p.Mode + ")");
+            EnqueueUi(_ => _card?.Show(CardContent.Inbox(p.Name)));
+        };
         // History (UI gate 3): one line per request, a long job updated in place when it ends.
         router.Recorded += _activity.Upsert;
         router.Completed += (label, status, code, message) =>
@@ -291,6 +306,12 @@ public sealed class Host : IDisposable, IUiHost
                 case "history.open":
                     UiWindows.Show("history", () => new HistoryWindow(this, Owner(arg)));
                     return null;
+                case "card.toggle":
+                    SetActivityCard(!(_card?.Enabled ?? _config.ActivityCard));
+                    return null;
+                case "inbox.open":
+                    UiWindows.Show("inbox", () => new InboxWindow(this, Owner(arg)));
+                    return null;
                 case "tools.open":
                     UiWindows.Show("tools", () => new ToolsWindow(ToolCatalog.Load(), Owner(arg)));
                     return null;
@@ -324,6 +345,22 @@ public sealed class Host : IDisposable, IUiHost
     }
 
     ActivitySnapshot IUiHost.Activity() => _activity.Snapshot();
+
+    IReadOnlyList<BakedProposal> IUiHost.Proposals() => _baked.Proposals();
+
+    IReadOnlyList<BakedCommand> IUiHost.BakedCommands() => _baked.Commands();
+
+    void IUiHost.AcceptBaked(string id)
+    {
+        BakedCommand c = _baked.Accept(id);
+        _log.Write("baked command accepted by the user: " + c.Name + " sha256=" + c.Sha256);
+    }
+
+    void IUiHost.RejectBaked(string id)
+    {
+        _baked.Reject(id);
+        _log.Write("baked command proposal rejected by the user");
+    }
 
     bool IUiHost.ChooseSession(WorkScope scope, Supervision supervision)
     {
@@ -428,6 +465,7 @@ public sealed class Host : IDisposable, IUiHost
             }
         }
         _config = _config with { ActivityCard = enabled };
+        Ribbon.SetCard(enabled);
         try
         {
             _config.Save(Path.Combine(s_root, "config.json"));

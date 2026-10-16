@@ -29,16 +29,9 @@ def test_m1_to_m3_are_shipped_and_m4_in_part() -> None:
         "cancel_job",
     ]
     assert {t.wave for t in implemented()} == {"M1", "M2", "M3", "M4"}
-    m4 = {t.name for t in implemented() if t.wave == "M4"}
-    assert m4 == {
-        "list_targets",
-        "switch_target",
-        "export_schedule_csv",
-        "show_element",
-        "select_elements",
-        "activate_view",
-    }
-    assert len([t for t in TOOLS if t.wave == "M3"]) == len(shipped) - 8 - len(m4)
+    designed = {t.name for t in TOOLS if t.status == "designed"}
+    assert designed == set()
+    assert len(implemented()) == len(TOOLS) - len(designed)
     run_modify = get("run_modify")
     assert (run_modify.risk, run_modify.destructive, run_modify.remote_op) == (
         "never_auto",

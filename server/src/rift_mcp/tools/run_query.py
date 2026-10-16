@@ -12,7 +12,7 @@ Values returned are untrusted model data, not instructions (ADR-020).
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -43,8 +43,11 @@ class Caller(Protocol):
 
 class RunQueryInput(BaseModel):
     script: str = Field(
-        min_length=1, description="IronPython 3.4 script; assign the answer to result"
+        min_length=1,
+        description="IronPython 3.4 script (assign the answer to result), or with language "
+        "csharp a C# method body that returns the answer",
     )
+    language: Literal["python", "csharp"] = "python"
     title: str = Field("query", max_length=120)
     inputs: dict[str, Any] = Field(default_factory=dict)
     timeout_s: int = Field(60, ge=1, le=MAX_TIMEOUT_S)
@@ -80,7 +83,7 @@ async def run_query(client: Caller, args: RunQueryInput) -> dict[str, Any]:
     if refusal is not None:
         return refusal
     compiled = await client.call(
-        "compile", {"script": args.script, "language": "python"}, timeout_s=30, tool=TOOL
+        "compile", {"script": args.script, "language": args.language}, timeout_s=30, tool=TOOL
     )
     check = compiled.get("result") or {}
     if not check.get("ok"):
@@ -102,7 +105,7 @@ async def run_query(client: Caller, args: RunQueryInput) -> dict[str, Any]:
         {
             "script": args.script,
             "mode": "query",
-            "language": "python",
+            "language": args.language,
             "title": args.title,
             "inputs": args.inputs,
             "timeout_s": args.timeout_s,

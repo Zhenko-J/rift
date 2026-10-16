@@ -35,6 +35,7 @@ class RunModifyInput(BaseModel):
     allow_reference: bool = False
     lint: bool = True
     timeout_s: int = Field(120, ge=1, le=MAX_TIMEOUT_S)
+    language: Literal["python", "csharp"] = "python"
 
 
 def missing_document() -> dict[str, Any]:
@@ -50,7 +51,8 @@ def missing_document() -> dict[str, Any]:
 
 async def run_modify(client: Caller, args: RunModifyInput) -> dict[str, Any]:
     warnings: list[dict[str, Any]] = []
-    if args.lint:
+    # The lint reads Python; a C# script is checked by the add-in's compiler and policy (ADR-035).
+    if args.lint and args.language == "python":
         report = lint(args.script)
         if report.errors:
             return {
@@ -63,7 +65,7 @@ async def run_modify(client: Caller, args: RunModifyInput) -> dict[str, Any]:
             }
         warnings = [w.to_dict() for w in report.warnings]
     compiled = await client.call(
-        "compile", {"script": args.script, "language": "python"}, timeout_s=30, tool=TOOL
+        "compile", {"script": args.script, "language": args.language}, timeout_s=30, tool=TOOL
     )
     check = compiled.get("result") or {}
     if not check.get("ok"):
@@ -85,7 +87,7 @@ async def run_modify(client: Caller, args: RunModifyInput) -> dict[str, Any]:
         {
             "script": args.script,
             "mode": "modify",
-            "language": "python",
+            "language": args.language,
             "title": args.title,
             "inputs": args.inputs,
             "timeout_s": args.timeout_s,

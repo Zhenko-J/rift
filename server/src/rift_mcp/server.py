@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -26,6 +26,7 @@ from .errors import RiftError
 from .registry import TOOLS, ToolSpec, get, get_prompt, get_resource
 from .tools import audit as _audit
 from .tools import history as _history
+from .tools import operations as _operations
 from .tools import ops as _ops
 from .tools import run_modify as _run_modify
 from .tools import run_query as _run_query
@@ -38,6 +39,9 @@ INSTRUCTIONS = (
     "audit_template returns the template-audit documents of a preset (p1-p6, or all of them in "
     "one job with the merged 00_TOUT); audit_template_write also writes them as JSON files into "
     "a folder the user chose. "
+    "Both also take language csharp: a C# method body that returns its answer, with doc, uidoc, "
+    "uiapp, app, inputs, print and report_progress in scope; no files, processes, network, "
+    "reflection, threads or event subscriptions. "
     "run_modify changes the model only on a SANDBOX copy (expected_document required), as a dry "
     "run unless dry_run is false; a kept change is one undo entry 'Agent: <title>' and every run "
     "returns a change receipt; follow the change prompt and record_change the reason. "
@@ -122,9 +126,11 @@ def build_server(pool: ClientPool | None = None) -> FastMCP:
         timeout_s: int = 60,
         expected_document: str | None = None,
         mode: str = "query",
+        language: Literal["python", "csharp"] = "python",
         pid: int | None = None,
     ) -> dict[str, Any]:
-        """Run an IronPython 3.4 script that reads the model; assign the answer to `result`."""
+        """Run a script that reads the model: IronPython 3.4 (assign the answer to `result`) or,
+        with language csharp, a C# method body that returns the answer."""
         refusal = _run_query.read_only_refusal(mode)
         if refusal is not None:
             return refusal
@@ -136,6 +142,7 @@ def build_server(pool: ClientPool | None = None) -> FastMCP:
                 timeout_s=timeout_s,
                 expected_document=expected_document,
                 mode=mode,
+                language=language,
             )
         except ValueError as exc:
             return {"ok": False, "error": {"code": "BAD_REQUEST", "message": str(exc)}}
@@ -231,6 +238,7 @@ def build_server(pool: ClientPool | None = None) -> FastMCP:
         allow_reference: bool = False,
         lint: bool = True,
         timeout_s: int = 120,
+        language: Literal["python", "csharp"] = "python",
         pid: int | None = None,
     ) -> dict[str, Any]:
         """Change the model with an IronPython 3.4 script, guarded: dry run by default, SANDBOX
@@ -248,6 +256,7 @@ def build_server(pool: ClientPool | None = None) -> FastMCP:
                 allow_reference=allow_reference,
                 lint=lint,
                 timeout_s=timeout_s,
+                language=language,
             )
         except ValueError as exc:
             return {"ok": False, "error": {"code": "BAD_REQUEST", "message": str(exc)}}
@@ -378,6 +387,27 @@ def build_server(pool: ClientPool | None = None) -> FastMCP:
             )
         except OSError as exc:
             return {"ok": False, "error": {"code": "WRITE_FAILED", "message": str(exc)}}
+
+    for name_ in _operations.OPS:
+        spec_ = get(name_)
+        mcp.add_tool(
+            _operations.make_tool(name_, guarded),
+            name=name_,
+            description=spec_.description,
+            annotations=annotations(spec_),
+        )
+
+    lr = get("launch_revit")
+
+    @mcp.tool(name=lr.name, description=lr.description, annotations=annotations(lr))
+    async def launch_revit(version: str | None = None) -> dict[str, Any]:
+        """Start an installed Revit; the newest one when no version is given."""
+        try:
+            return _operations.launch_revit(version)
+        except RiftError as exc:
+            return {"ok": False, "error": exc.to_dict()}
+        except OSError as exc:
+            return {"ok": False, "error": {"code": "LAUNCH_FAILED", "message": str(exc)}}
 
     @mcp.prompt(name="getting_started", description=get_prompt("getting_started").description)
     def getting_started_prompt(focus: str = "") -> str:

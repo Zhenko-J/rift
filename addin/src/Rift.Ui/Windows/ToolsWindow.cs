@@ -71,11 +71,11 @@ public sealed class ToolsWindow : RiftWindow
 
     private Button Filter(string verb, string? risk)
     {
-        Button b = Z.GhostButton(_risk == risk ? "[" + verb + "]" : verb, () =>
+        Button b = Z.GhostButton(verb, () =>
         {
             _risk = risk;
             Refresh(true);
-        });
+        }, _risk == risk);
         b.Margin = new Thickness(0, 0, Theme.Size.Gutter, Theme.Size.Gutter);
         return b;
     }

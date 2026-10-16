@@ -73,6 +73,8 @@ public sealed partial class ActivityCard : IDisposable
             Background = Theme.Brush(Theme.Palette.Card),
             CornerRadius = new CornerRadius(Theme.Radius.Panel),
             Padding = new Thickness(Theme.Pad.Compact),
+            Margin = new Thickness(Theme.ShadowMargin),
+            Effect = Theme.CardShadow(),
             Child = stack,
         };
         _window = new Window

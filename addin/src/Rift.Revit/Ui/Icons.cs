@@ -36,6 +36,12 @@ internal static class Icons
     /// <summary>Lucide "list": the Tools button (the catalogue).</summary>
     public const string List = "list";
 
+    /// <summary>Lucide "message-square": the activity card switch.</summary>
+    public const string Card = "message-square";
+
+    /// <summary>Lucide "inbox": the inbox of baked commands.</summary>
+    public const string Inbox = "inbox";
+
     /// <summary>Z#D01 ink <c>#191918</c>, on Revit's light theme (the theme file arrives with the UI work stream).</summary>
     public static readonly Color InkOnLight = Color.FromRgb(0x19, 0x19, 0x18);
 
@@ -73,6 +79,15 @@ internal static class Icons
             "M3 12 A9 9 0 1 0 12 3 A9.75 9.75 0 0 0 5.26 5.74 L3 8",
             "M3 3 V8 H8",
             "M12 7 V12 L16 14",
+        },
+        [Card] = new[]
+        {
+            "M21 15 A2 2 0 0 1 19 17 H7 L3 21 V5 A2 2 0 0 1 5 3 H19 A2 2 0 0 1 21 5 Z",
+        },
+        [Inbox] = new[]
+        {
+            "M22 12 H16 L14 15 H10 L8 12 H2",
+            "M5.45 5.11 L2 12 V18 A2 2 0 0 0 4 20 H20 A2 2 0 0 0 22 18 V12 L18.55 5.11 A2 2 0 0 0 16.76 4 H7.24 A2 2 0 0 0 5.45 5.11 Z",
         },
         [List] = new[]
         {

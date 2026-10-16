@@ -333,14 +333,17 @@ async def call_typed(
         if key in kwargs:
             args[key] = kwargs.pop(key)
     args["inputs"] = {k: v for k, v in kwargs.items() if v is not None}
-    response = await client.call(
-        "tool",
-        args,
-        timeout_s=timeout_s + JOB_MARGIN_S + (600 if args.get("policy") == "ask" else 0),
-        wait_s=min(timeout_s + 5, PIPE_WAIT_S),
-        tool=name,
-        expected_document=expected_document(document),
-    )
+    try:
+        response = await client.call(
+            "tool",
+            args,
+            timeout_s=timeout_s + JOB_MARGIN_S + (600 if args.get("policy") == "ask" else 0),
+            wait_s=min(timeout_s + 5, PIPE_WAIT_S),
+            tool=name,
+            expected_document=expected_document(document),
+        )
+    except RiftError as exc:
+        raise readable(exc) from exc
     result = response.get("result") or {}
     run = result.get("run") or {}
     out: dict[str, Any] = {"ok": True, "tool": name, "result": result.get("result")}
@@ -355,6 +358,19 @@ async def call_typed(
     if response.get("job"):
         out["job"] = response["job"]
     return out
+
+
+def readable(exc: RiftError) -> RiftError:
+    """A typed tool's ``SCRIPT_ERROR`` carries "ValueError at line N" (the add-in keeps script
+    messages off the activity card) and the line counts the shared prelude: the tool's own
+    message, already in ``details.error.message``, is what the caller needs."""
+    if exc.code != "SCRIPT_ERROR" or not isinstance(exc.details, dict):
+        return exc
+    error = exc.details.get("error")
+    text = error.get("message") if isinstance(error, dict) else None
+    if not isinstance(text, str) or not text.strip():
+        return exc
+    return RiftError(exc.code, text.strip()[:500], exc.details)
 
 
 Guarded = Callable[

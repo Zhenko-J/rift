@@ -138,15 +138,18 @@ public static class Z
         };
     }
 
-    /// <summary>A verb in lower case in a round 2 px outline, at least 44 px high.</summary>
-    public static Button GhostButton(string verb, Action onClick)
+    /// <summary>
+    /// A verb in lower case in a round 2 px outline, at least 44 px high. <paramref name="selected"/> fills it with the
+    /// accent and writes the verb on it (the chosen option of a question or a filter).
+    /// </summary>
+    public static Button GhostButton(string verb, Action onClick, bool selected = false)
     {
         ArgumentNullException.ThrowIfNull(onClick);
         var border = new FrameworkElementFactory(typeof(Border));
-        border.SetValue(Border.BorderBrushProperty, Theme.Brush(Theme.Palette.Stroke));
+        border.SetValue(Border.BorderBrushProperty, Theme.Brush(selected ? Theme.Palette.Accent : Theme.Palette.Stroke));
         border.SetValue(Border.BorderThicknessProperty, new Thickness(Theme.Size.StrokeWidth));
         border.SetValue(Border.CornerRadiusProperty, new CornerRadius(Theme.Size.HitMin / 2));
-        border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        border.SetValue(Border.BackgroundProperty, selected ? Theme.Brush(Theme.Palette.Accent) : Brushes.Transparent);
         border.SetValue(Border.PaddingProperty, new Thickness(18, 0, 18, 0));
         var content = new FrameworkElementFactory(typeof(ContentPresenter));
         content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
@@ -155,12 +158,20 @@ public static class Z
         var button = new Button
         {
             Template = new ControlTemplate(typeof(Button)) { VisualTree = border },
-            Content = Value(verb),
+            Content = selected ? OnAccent(verb) : Value(verb),
             MinHeight = Theme.Size.HitMin,
             Cursor = System.Windows.Input.Cursors.Hand,
             Margin = new Thickness(0, 0, Theme.Size.Gutter, 0),
         };
         button.Click += (_, _) => onClick();
+        System.Windows.Automation.AutomationProperties.SetName(button, selected ? verb + " (selected)" : verb);
         return button;
+    }
+
+    private static TextBlock OnAccent(string text)
+    {
+        TextBlock t = Value(text);
+        t.Foreground = Theme.Brush(Theme.Palette.OnAccent);
+        return t;
     }
 }

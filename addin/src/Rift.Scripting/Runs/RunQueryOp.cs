@@ -49,13 +49,16 @@ public sealed class RunQueryOp : IOperationHandler
     private static readonly string[] s_disarmFailed = { "guard_disarm_failed" };
 
     private readonly Func<IScriptEngine> _engine;
+    private readonly Func<IScriptEngine>? _csharp;
     private readonly Func<IRunHost> _host;
     private readonly RunJournal? _journal;
     private readonly FileLog _log;
 
-    public RunQueryOp(Func<IScriptEngine> engine, Func<IRunHost> host, RunJournal? journal, FileLog log)
+    /// <param name="csharp">The C# engine (ADR-035), or null when this host has none (<c>language: csharp</c> is then refused).</param>
+    public RunQueryOp(Func<IScriptEngine> engine, Func<IRunHost> host, RunJournal? journal, FileLog log, Func<IScriptEngine>? csharp = null)
     {
         _engine = engine;
+        _csharp = csharp;
         _host = host;
         _journal = journal;
         _log = log;
@@ -114,7 +117,7 @@ public sealed class RunQueryOp : IOperationHandler
     private JsonObject Run(RequestEnvelope request, string op, string mode, string language, string script, string title, TimeSpan timeout,
         JsonNode inputs, IReadOnlyDictionary<string, object?>? extras, IProgress<(int Percent, string Message)> progress, CancellationToken cancellation)
     {
-        IScriptEngine engine = RequireTimeout();
+        IScriptEngine engine = RequireTimeout(language);
         IRunHost host = _host();
         RunTarget target = host.Target;
         CheckExpectedDocument(request, target);
@@ -167,7 +170,7 @@ public sealed class RunQueryOp : IOperationHandler
         string requested = RunArgs.Policy(request);
         bool allowReference = RunArgs.AllowReference(request);
 
-        IScriptEngine engine = RequireTimeout();
+        IScriptEngine engine = RequireTimeout(language);
         IRunHost host = _host();
         RunTarget target = host.Target;
         if (!HasExpectedDocument(request))
@@ -303,9 +306,11 @@ public sealed class RunQueryOp : IOperationHandler
 
     // ── shared ───────────────────────────────────────────────────────────────────────────────
 
-    private IScriptEngine RequireTimeout()
+    private IScriptEngine RequireTimeout(string language)
     {
-        IScriptEngine engine = _engine();
+        IScriptEngine engine = language == "csharp"
+            ? (_csharp ?? throw new OperationException(ErrorCodes.BadRequest, "C# scripts are not available in this host", refused: true))()
+            : _engine();
         if (!engine.TimeoutAvailable)
         {
             throw new OperationException(ErrorCodes.TimeoutUnavailable, "the cooperative timeout is unavailable in this Revit session: scripts are refused");
@@ -331,8 +336,9 @@ public sealed class RunQueryOp : IOperationHandler
         {
             result["outcome"] = "error";
             result["reason"] = "syntax_error";
-            result["error"] = new JsonObject { ["type"] = "SyntaxError", ["message"] = Sanitizer.Sanitize(compiled.Message, 2048), ["line"] = compiled.Line, ["column"] = compiled.Column };
-            throw new OperationException(ErrorCodes.ScriptError, "SyntaxError at line " + compiled.Line.ToString(CultureInfo.InvariantCulture) + " (nothing was run)", result);
+            string type = engine.Language == "csharp" ? "CompileError" : "SyntaxError";
+            result["error"] = new JsonObject { ["type"] = type, ["message"] = Sanitizer.Sanitize(compiled.Message, 2048), ["line"] = compiled.Line, ["column"] = compiled.Column };
+            throw new OperationException(ErrorCodes.ScriptError, type + " at line " + compiled.Line.ToString(CultureInfo.InvariantCulture) + " (nothing was run)", result);
         }
         return compiled;
     }
@@ -672,7 +678,8 @@ public sealed class RunQueryOp : IOperationHandler
         return path || title;
     }
 
-    private static void CheckExpectedDocument(RequestEnvelope request, RunTarget target)
+    /// <summary>Refuses with DOCUMENT_MISMATCH when the request names another document (also used by the M4 operations).</summary>
+    public static void CheckExpectedDocument(RequestEnvelope request, RunTarget target)
     {
         if (request.ExpectedDocument is not JsonObject expected)
         {

@@ -9,11 +9,11 @@ Chantier séparé ouvert le 2026-10-12 en application d'ADR-026 §5. Il a ses pr
 
 ## Tranches
 - [x] Tranche 1 — balle traçante : un clic met l'assistant en pause, la carte le dit (`Rift.Ui`, `PauseGate`, ruban dans `Rift.Revit`, `PAUSED` côté client)
-- [~] Tranche 2 — le panneau complet, avec ses icônes (Lucide, `developer`, carte mémorisée)
-- [~] Tranche 3 — le kit Z_D01 et la fenêtre Status
-- [~] Tranche 4 — History : ce que l'assistant a fait pendant la séance
-- [~] Tranche 5 — Tools, recette complète et clôture (hors reçus)
-- [~] Tranche 6 — reçus de changement dans History (après M2)
+- [x] Tranche 2 — le panneau complet, avec ses icônes (Lucide, `developer`, carte mémorisée)
+- [x] Tranche 3 — le kit Z_D01 et la fenêtre Status
+- [x] Tranche 4 — History : ce que l'assistant a fait pendant la séance
+- [x] Tranche 5 — Tools, recette complète et clôture (hors reçus)
+- [x] Tranche 6 — reçus de changement dans History (après M2)
 
 ## Cible (point de départ de la porte 1)
 
@@ -55,3 +55,9 @@ Status avec interrupteur de carte, `Ui/Theme.cs` appliqué à la carte, icônes 
 - **Tests.** `ActivityTests` : clé unique mise à jour en place, anneau, reçus par catégorie, routeur (une ligne par requête, jamais le sondage, job long accepté puis fini sous la même clé), formats de History, catalogue embarqué = fichier du pamphlet, les trois fenêtres construisent leur corps sans Revit. 386 xUnit.
 - **Écarts.** Pas de bouton `card` dans le ruban : l'interrupteur reste dans Status ; `Icons.cs` reste dans `Rift.Revit` ; ombre de la carte et `ReduceMotion` non faits ; pas de capture Z_D01 automatique (ZAudit).
 - **Reste : recettes 24 à 28 dans Revit** (copie SANDBOX) — ouvrir Status, History et Tools ; un `run_modify` gardé → la ligne History montre les mêmes comptes que la réponse ; un `run_query` long qui finit sans être sondé ; rafale de 20 appels ; captures.
+
+## Clôture du code (2026-10-16)
+
+- **Fait.** Bouton `card` du ruban (Lucide `message-square`, libellé `card on`/`card off`, mémorisé dans `config.json`), ombre unique sous la carte d'activité (`Theme.CardShadow`), bouton et fenêtre `inbox` des commandes figées (ADR-034, le script entier est montré, seul l'utilisateur accepte), fenêtre de séance (ADR-033) ; l'option choisie de la fenêtre de séance et du filtre de Tools est remplie de l'accent (retour de la recette du 2026-10-16). Les six tranches sont codées ; `Icons.cs` reste dans `Rift.Revit` (écart accepté : rien ne l'utilise hors du ruban).
+- **Recette du 2026-10-16 (séance).** Séance en attente → `SESSION_PENDING` (17 ms, rien d'exécuté) ; réponse « sandbox · supervised » puis « full auto » via `change session`, lues par `get_context` ; essai à blanc sans dialogue en mode supervisé ; écritures gardées refusées par `AGENT_CONFLICT` (pyRevit MCP et BIMWright chargés) — `coexist_with_other_agents` activé par le mainteneur pour la recette suivante.
+- **Reste : recettes 24 à 28 dans Revit** avec l'add-in à jour (Status, History, Tools, inbox, card, Garder/Annuler en mode supervisé, full auto).

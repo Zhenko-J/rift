@@ -6,7 +6,7 @@ RIFT connects an MCP client (Claude Code, Claude Desktop, Cursor and other stdio
 
 Inside Revit, RIFT shows up as the `RIFT` panel of a ribbon tab named `NORN`. RIFT creates the tab when it is missing and needs no other add-in: the tab name only lets other plugins by the same author share it when they happen to be installed.
 
-> **Status: pre-alpha.** Milestones M1 (read-only), M2 (guarded writes) and M3 (typed library) are implemented and were accepted inside Revit 2026.3 on a SANDBOX copy on 2026-10-16. The 2026-10-16 benchmark found open security issues in the read-only path. Read [Security status and known limitations](#security-status-and-known-limitations) before you connect RIFT to a model you care about. M4 is in progress (targets, schedule export, window tools); M5 (in-Revit windows) is implemented and pending acceptance. Tested only on Revit 2026, Windows 11 and Claude Code.
+> **Status: pre-alpha.** Milestones M1 (read-only), M2 (guarded writes) and M3 (typed library) are implemented and were accepted inside Revit 2026.3 on a SANDBOX copy on 2026-10-16. The 2026-10-16 benchmark found open security issues in the read-only path. Read [Security status and known limitations](#security-status-and-known-limitations) before you connect RIFT to a model you care about. M4 and M5 are implemented and pending acceptance in Revit; M5 (in-Revit windows) is implemented and pending acceptance. Tested only on Revit 2026, Windows 11 and Claude Code.
 
 ## Contents
 
@@ -67,8 +67,8 @@ RIFT is **not**:
 | M1: read-only end to end | Signed pipe, lease, `get_context`, `run_query` under the read guard, six audit presets, `install claude`, `doctor`, generated listings, `SHA256SUMS.txt` checked at install | Implemented. Exercised in Revit 2026.3 on 2026-10-16 by `rift-mcp selftest --write` and the benchmark. Tranche 1 was accepted on 2026-10-13. |
 | M2: guarded writes | `run_modify` (document policy, dry run, write guard, one undo entry, receipts), per-document history, `record_change`, `get_change_records`, `cancel_job`, `change` prompt, server-side lint | Implemented. Accepted 2026-10-16 on a SANDBOX copy: dry run, kept change, rollback on error and timeout, `DOCUMENT_MISMATCH`, history. Keep/Discard (`policy: "ask"`) accepted the same day after a fix (the dialog did not show in the first build). `cancel_job` cannot be reached from an MCP client yet. |
 | M3: typed library, wave 1 | 50 typed tools, `survey`, `batch`, `result_ref`, `model_audit` and `pre_issue_check` prompts, `rift://session/context` resource | Implemented. Accepted 2026-10-16 with every domain exercised on a SANDBOX copy. Four defects found during acceptance were fixed in the same commit. |
-| M4: free code wave 2 and operations | C# (Roslyn) under the same guard, baked commands, several Revit instances (`list_targets`/`switch_target`), exports, document life cycle, UI tools, `getting_started` prompt | In progress. Implemented, pending acceptance in Revit: `list_targets` and `switch_target` (pin one of several Revit instances), `export_schedule_csv` (written by the server, not by Revit), `select_elements`, `show_element`, `activate_view` (the model does not change) and the `getting_started` prompt. Designed: C#, baked commands, the other exports and the document life cycle (12 tools listed as `designed` below). |
-| M5: ribbon and in-Revit UI | Pause button, tooltips, Status window, History window with receipts, tool catalogue | Tranche 1 accepted in Revit on 2026-10-16: the `server on` / `paused` toggle (ten calls refused with `PAUSED`, none executed), tooltips and long descriptions on every button, the activity card in the project's visual style. Tranches 2 to 6 implemented, pending acceptance in Revit: **status**, **history** (every call of the session with its result, code, duration and change receipt) and **tools** (the catalogue) windows. Plan in [`docs/plans/ui-ribbon/`](docs/plans/ui-ribbon/). |
+| M4: free code wave 2 and operations | C# (Roslyn) under the same guard, baked commands, several Revit instances (`list_targets`/`switch_target`), exports, document life cycle, UI tools, `getting_started` prompt | Implemented, pending acceptance in Revit (every tool of the registry is now implemented): C# scripts (`language: csharp`, ADR-035), baked commands with an inbox in Revit (ADR-034), `list_targets` / `switch_target`, exports to PDF, DWG, IFC, NWC, images and schedule CSV, `open_document`, `save_document`, `close_document`, `sync_with_central` (always confirmed by you in Revit), `launch_revit`, `select_elements`, `show_element`, `activate_view` and the `getting_started` prompt. |
+| M5: ribbon and in-Revit UI | Pause button, tooltips, Status window, History window with receipts, tool catalogue | Tranche 1 accepted in Revit on 2026-10-16: the `server on` / `paused` toggle (ten calls refused with `PAUSED`, none executed), tooltips and long descriptions on every button, the activity card in the project's visual style. Tranches 2 to 6 implemented, pending acceptance in Revit: **status**, **history** (every call of the session with its result, code, duration and change receipt), **tools** (the catalogue), **inbox** (baked commands) and **card** buttons, the session window (ADR-033). Plan in [`docs/plans/ui-ribbon/`](docs/plans/ui-ribbon/). |
 | v1.0.0 | M1–M3, installer, CI, self-test, benchmark | **Not released.** Blocked on the two P1 items of the 2026-10-16 benchmark that are still open: deferred code and file-system access from `run_query`. |
 
 Versions at HEAD: `rift-mcp` 0.0.1, add-in 0.1.0, wire protocol 2.0. Acceptance records (in French, the maintainer's working language) are in `docs/plans/m1-read-only/00-status.md`, `docs/plans/m2-guarded-writes/00-status.md` and `docs/plans/m3-typed-library/00-status.md`. Progress is in [CHANGELOG.md](CHANGELOG.md).
@@ -174,7 +174,7 @@ The listing below is generated from the tool registry (`server/src/rift_mcp/regi
 
 <!-- tools:begin (generated by `rift-mcp tools --format md`, do not edit) -->
 
-79 tools in the catalogue, 67 shipped. `designed` tools are planned and do not run yet. Risk follows ADR-012: `auto` fixed reads, `ask` bounded side effects, `never_auto` writes and the document life cycle. Origin names the counterpart in the pyRevit MCP extension or in rvt-mcp.
+80 tools in the catalogue, 80 shipped. `designed` tools are planned and do not run yet. Risk follows ADR-012: `auto` fixed reads, `ask` bounded side effects, `never_auto` writes and the document life cycle. Origin names the counterpart in the pyRevit MCP extension or in rvt-mcp.
 
 **M1 — read-only end to end**
 
@@ -256,21 +256,22 @@ The listing below is generated from the tool registry (`server/src/rift_mcp/regi
 
 | Tool | Toolset | Risk | Status | Origin |
 |---|---|---|---|---|
-| `list_baked_tools` | baked commands | `auto` | designed | `rvt-mcp:revit_list_baked_tools` |
-| `run_baked_tool` | baked commands | `never_auto` | designed | `rvt-mcp:revit_run_baked_tool` |
+| `list_baked_tools` | baked commands | `auto` | implemented | `rvt-mcp:revit_list_baked_tools` |
+| `propose_baked_tool` | baked commands | `ask` | implemented | — |
+| `run_baked_tool` | baked commands | `never_auto` | implemented | `rvt-mcp:revit_run_baked_tool` |
 | `list_targets` | targets | `auto` | implemented | `rvt-mcp:revit_list_available_targets`, `pyrevit:list_revit_installations` |
 | `switch_target` | targets | `ask` | implemented | `rvt-mcp:revit_switch_target` |
-| `export_pdf` | exports | `ask` | designed | `rvt-mcp:revit_export_pdf` |
-| `export_dwg` | exports | `ask` | designed | `rvt-mcp:revit_export_dwg` |
-| `export_ifc` | exports | `ask` | designed | `rvt-mcp:revit_export_ifc` |
-| `export_nwc` | exports | `ask` | designed | `rvt-mcp:revit_export_nwc` |
-| `export_image` | exports | `ask` | designed | `rvt-mcp:revit_export_image`, `rvt-mcp:revit_capture_view_image`, `pyrevit:get_revit_view` |
+| `export_pdf` | exports | `ask` | implemented | `rvt-mcp:revit_export_pdf` |
+| `export_dwg` | exports | `ask` | implemented | `rvt-mcp:revit_export_dwg` |
+| `export_ifc` | exports | `ask` | implemented | `rvt-mcp:revit_export_ifc` |
+| `export_nwc` | exports | `ask` | implemented | `rvt-mcp:revit_export_nwc` |
+| `export_image` | exports | `ask` | implemented | `rvt-mcp:revit_export_image`, `rvt-mcp:revit_capture_view_image`, `pyrevit:get_revit_view` |
 | `export_schedule_csv` | exports | `ask` | implemented | `rvt-mcp:revit_export_schedule_csv` |
-| `open_document` | documents | `ask` | designed | `pyrevit:open_document`, `rvt-mcp:revit_open_model` |
-| `save_document` | documents | `never_auto` | designed | `pyrevit:save_document` |
-| `close_document` | documents | `never_auto` | designed | `pyrevit:close_document` |
-| `sync_with_central` | documents | `never_auto` | designed | `pyrevit:sync_with_central` |
-| `launch_revit` | documents | `ask` | designed | `pyrevit:launch_revit` |
+| `open_document` | documents | `ask` | implemented | `pyrevit:open_document`, `rvt-mcp:revit_open_model` |
+| `save_document` | documents | `never_auto` | implemented | `pyrevit:save_document` |
+| `close_document` | documents | `never_auto` | implemented | `pyrevit:close_document` |
+| `sync_with_central` | documents | `never_auto` | implemented | `pyrevit:sync_with_central` |
+| `launch_revit` | documents | `ask` | implemented | `pyrevit:launch_revit` |
 | `show_element` | ui | `ask` | implemented | `rvt-mcp:revit_show_element_in_view` |
 | `select_elements` | ui | `ask` | implemented | `rvt-mcp:revit_select_elements` |
 | `activate_view` | ui | `ask` | implemented | `rvt-mcp:revit_activate_view` |

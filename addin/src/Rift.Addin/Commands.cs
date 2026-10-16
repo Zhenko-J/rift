@@ -59,6 +59,22 @@ public sealed class HistoryCommand : RelayCommand
     protected override string Command => "history.open";
 }
 
+/// <summary>The activity card switch (ADR-023), remembered in config.json.</summary>
+[Transaction(TransactionMode.Manual)]
+[Regeneration(RegenerationOption.Manual)]
+public sealed class CardCommand : RelayCommand
+{
+    protected override string Command => "card.toggle";
+}
+
+/// <summary>The inbox of baked commands (ADR-034): the user accepts or rejects what the assistant proposed.</summary>
+[Transaction(TransactionMode.Manual)]
+[Regeneration(RegenerationOption.Manual)]
+public sealed class InboxCommand : RelayCommand
+{
+    protected override string Command => "inbox.open";
+}
+
 /// <summary>The Tools window (UI gate 3): the tool catalogue with its waves and risks.</summary>
 [Transaction(TransactionMode.Manual)]
 [Regeneration(RegenerationOption.Manual)]

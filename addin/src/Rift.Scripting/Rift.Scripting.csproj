@@ -7,6 +7,7 @@
   <ItemGroup>
     <PackageReference Include="IronPython" />
     <PackageReference Include="IronPython.StdLib" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Rift.Tests" />

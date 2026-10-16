@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text.Json;
 
 using Rift.Core.Activity;
+using Rift.Core.Baked;
 using Rift.Core.Control;
 using Rift.Core.Protocol;
 
@@ -48,6 +49,18 @@ public interface IUiHost
 
     /// <summary>Opens the session window again (to change the answer, or to give it after closing the window).</summary>
     void OpenSession();
+
+    /// <summary>Baked command proposals waiting for the user (ADR-034).</summary>
+    IReadOnlyList<BakedProposal> Proposals();
+
+    /// <summary>Baked commands the user accepted.</summary>
+    IReadOnlyList<BakedCommand> BakedCommands();
+
+    /// <summary>The user accepted a proposal in the inbox window.</summary>
+    void AcceptBaked(string id);
+
+    /// <summary>The user rejected a proposal in the inbox window.</summary>
+    void RejectBaked(string id);
 }
 
 /// <summary>One line of History, formatted (UI gate 3): every text is ready to show.</summary>

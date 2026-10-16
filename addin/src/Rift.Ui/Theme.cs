@@ -73,6 +73,24 @@ public static class Theme
         public const double Compact = 20;
     }
 
+    /// <summary>The one shadow of the interface: under the floating activity card only (the windows sit on the ground).</summary>
+    public static System.Windows.Media.Effects.DropShadowEffect CardShadow()
+    {
+        var shadow = new System.Windows.Media.Effects.DropShadowEffect
+        {
+            Color = Palette.Ink,
+            BlurRadius = 18,
+            ShadowDepth = 4,
+            Direction = 270,
+            Opacity = 0.18,
+        };
+        shadow.Freeze();
+        return shadow;
+    }
+
+    /// <summary>Margin the card window keeps around the card so that its shadow is not clipped.</summary>
+    public const double ShadowMargin = 14;
+
     /// <summary>Consolas everywhere.</summary>
     public static readonly FontFamily Mono = new("Consolas, Courier New");
 

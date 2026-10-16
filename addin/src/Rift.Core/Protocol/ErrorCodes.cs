@@ -26,6 +26,21 @@ public static class ErrorCodes
     public const string Cancelled = "CANCELLED";
     public const string TimeoutUnavailable = "TIMEOUT_UNAVAILABLE";
     public const string JobNotFound = "JOB_NOT_FOUND";
+
+    /// <summary>M4 exports: a file of that name is already in the folder and overwrite was not asked.</summary>
+    public const string FileExists = "FILE_EXISTS";
+
+    /// <summary>ADR-034: a baked command whose script no longer matches the SHA-256 recorded when the user accepted it.</summary>
+    public const string HashMismatch = "HASH_MISMATCH";
+
+    /// <summary>M4 exports: Revit's exporter returned false or threw.</summary>
+    public const string ExportFailed = "EXPORT_FAILED";
+
+    /// <summary>M4 exports: the exporter is not installed in this Revit (Navisworks NWC).</summary>
+    public const string ExporterUnavailable = "EXPORTER_UNAVAILABLE";
+
+    /// <summary>M4 document life cycle: the user answered no to the confirmation shown in Revit.</summary>
+    public const string UserDeclined = "USER_DECLINED";
     /// <summary>Not an error code but a rollback reason (ADR-025): the read guard saw a write in <c>mode: query</c>.</summary>
     public const string WriteInQuery = "WRITE_IN_QUERY";
     /// <summary>
