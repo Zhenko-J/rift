@@ -29,7 +29,7 @@ namespace Rift.Tests;
 /// </summary>
 public sealed class TypedToolTests : IClassFixture<EngineFixture>, IDisposable
 {
-    /// <summary>The M3 typed tools the registry ships (result_ref is served by the server alone, batch by TypedToolOp).</summary>
+    /// <summary>The typed tools the registry ships: M3, and the Revit-window tools of M4 (result_ref is served by the server alone, batch by TypedToolOp).</summary>
     public static readonly string[] Expected =
     {
         "list_view_templates", "get_view_template", "apply_view_template", "duplicate_view_template", "delete_view_template",
@@ -42,6 +42,7 @@ public sealed class TypedToolTests : IClassFixture<EngineFixture>, IDisposable
         "get_family_instances", "duplicate_family_type", "rename_family_type", "list_levels", "list_views", "get_element",
         "get_element_parameters", "find_elements", "get_view_elements", "set_element_parameters", "set_type_parameters",
         "delete_elements", "get_warnings_summary", "find_untagged_elements", "audit_model", "purge_unused", "survey",
+        "select_elements", "show_element", "activate_view",
     };
 
     private readonly EngineFixture _fixture;
@@ -55,7 +56,7 @@ public sealed class TypedToolTests : IClassFixture<EngineFixture>, IDisposable
     // ── catalogue ────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void The_catalogue_holds_exactly_the_m3_tools()
+    public void The_catalogue_holds_exactly_the_shipped_typed_tools()
     {
         Assert.Equal(Expected.OrderBy(n => n, StringComparer.Ordinal), TypedToolCatalog.Default.Names);
         Assert.True(TypedToolCatalog.PreludeLines > 50);

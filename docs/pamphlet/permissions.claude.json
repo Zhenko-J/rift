@@ -31,7 +31,8 @@
       "mcp__rift__find_untagged_elements",
       "mcp__rift__audit_model",
       "mcp__rift__survey",
-      "mcp__rift__result_ref"
+      "mcp__rift__result_ref",
+      "mcp__rift__list_targets"
     ],
     "ask": [
       "mcp__rift__run_query",
@@ -63,7 +64,12 @@
       "mcp__rift__set_type_parameters",
       "mcp__rift__delete_elements",
       "mcp__rift__purge_unused",
-      "mcp__rift__batch"
+      "mcp__rift__batch",
+      "mcp__rift__switch_target",
+      "mcp__rift__export_schedule_csv",
+      "mcp__rift__show_element",
+      "mcp__rift__select_elements",
+      "mcp__rift__activate_view"
     ]
   }
 }

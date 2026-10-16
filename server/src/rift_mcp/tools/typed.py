@@ -194,6 +194,10 @@ ARGS: dict[str, list[tuple[str, Any, Any, str]]] = {
     # elements
     "list_levels": [],
     "list_views": [("view_type", str | None, None, "FloorPlan, CeilingPlan, Section, Elevation…")],
+    # Revit window (M4): the selection and the view change, the model does not
+    "select_elements": [("element_ids", Ids, REQUIRED, "element ids; an empty list clears")],
+    "show_element": [("element_ids", Ids, REQUIRED, "element ids to select and zoom on")],
+    "activate_view": [("view", Ref, REQUIRED, "view id or name")],
     "get_element": [("element_ids", Ids, REQUIRED, "element ids")],
     "get_element_parameters": [
         ("element_ids", Ids, REQUIRED, "element ids"),

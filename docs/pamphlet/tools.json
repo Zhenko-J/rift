@@ -2,7 +2,7 @@
   "server": "rift",
   "version": "0.0.1",
   "protocol": "2.0",
-  "current_wave": "M3",
+  "current_wave": "M4",
   "waves": [
     {
       "id": "M1",
@@ -1113,7 +1113,7 @@
       "wave": "M4",
       "toolset": "targets",
       "risk": "auto",
-      "status": "designed",
+      "status": "implemented",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -1124,14 +1124,14 @@
         "rvt-mcp:revit_list_available_targets",
         "pyrevit:list_revit_installations"
       ],
-      "description": "Revit instances served on this machine."
+      "description": "Revit instances served by the RIFT add-in on this machine (pid, Revit version, add-in and protocol versions, start time) and the one pinned by switch_target. Read on this machine, Revit is not called."
     },
     {
       "name": "switch_target",
       "wave": "M4",
       "toolset": "targets",
       "risk": "ask",
-      "status": "designed",
+      "status": "implemented",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,
@@ -1141,7 +1141,7 @@
       "origin": [
         "rvt-mcp:revit_switch_target"
       ],
-      "description": "Pin the Revit instance to talk to."
+      "description": "Pin the Revit instance every later call goes to (pid from list_targets; no pid unpins) and return its context."
     },
     {
       "name": "export_pdf",
@@ -1235,7 +1235,7 @@
       "wave": "M4",
       "toolset": "exports",
       "risk": "ask",
-      "status": "designed",
+      "status": "implemented",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,
@@ -1245,7 +1245,7 @@
       "origin": [
         "rvt-mcp:revit_export_schedule_csv"
       ],
-      "description": "Export a schedule to CSV."
+      "description": "Export a schedule's rows as displayed to a CSV file (UTF-8 with BOM) in a folder the user chose; an existing file is kept unless overwrite is true. Reads the model only."
     },
     {
       "name": "open_document",
@@ -1338,7 +1338,7 @@
       "wave": "M4",
       "toolset": "ui",
       "risk": "ask",
-      "status": "designed",
+      "status": "implemented",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,
@@ -1348,14 +1348,14 @@
       "origin": [
         "rvt-mcp:revit_show_element_in_view"
       ],
-      "description": "Zoom to an element in a view."
+      "description": "Select elements and zoom the active view on them. The model does not change."
     },
     {
       "name": "select_elements",
       "wave": "M4",
       "toolset": "ui",
       "risk": "ask",
-      "status": "designed",
+      "status": "implemented",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,
@@ -1365,14 +1365,14 @@
       "origin": [
         "rvt-mcp:revit_select_elements"
       ],
-      "description": "Set the Revit selection."
+      "description": "Set the Revit selection (an empty list clears it). The model does not change."
     },
     {
       "name": "activate_view",
       "wave": "M4",
       "toolset": "ui",
       "risk": "ask",
-      "status": "designed",
+      "status": "implemented",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,
@@ -1382,7 +1382,7 @@
       "origin": [
         "rvt-mcp:revit_activate_view"
       ],
-      "description": "Make a view active."
+      "description": "Ask Revit to make a view active; it switches once the call has returned. The model does not change."
     }
   ],
   "prompts": [
@@ -1416,7 +1416,7 @@
     {
       "name": "getting_started",
       "wave": "M4",
-      "status": "designed",
+      "status": "implemented",
       "origin": [
         "rvt-mcp:revit_getting_started"
       ],

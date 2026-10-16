@@ -16,7 +16,7 @@ def test_registry_is_valid_and_names_are_unique() -> None:
     assert len({t.name for t in TOOLS}) == len(TOOLS)
 
 
-def test_m1_to_m3_are_shipped_and_m4_is_designed() -> None:
+def test_m1_to_m3_are_shipped_and_m4_in_part() -> None:
     shipped = [t.name for t in implemented()]
     assert shipped[:8] == [
         "get_context",
@@ -28,9 +28,17 @@ def test_m1_to_m3_are_shipped_and_m4_is_designed() -> None:
         "get_change_records",
         "cancel_job",
     ]
-    assert {t.wave for t in implemented()} == {"M1", "M2", "M3"}
-    assert all(t.status == "designed" for t in TOOLS if t.wave == "M4")
-    assert len([t for t in TOOLS if t.wave == "M3"]) == len(shipped) - 8
+    assert {t.wave for t in implemented()} == {"M1", "M2", "M3", "M4"}
+    m4 = {t.name for t in implemented() if t.wave == "M4"}
+    assert m4 == {
+        "list_targets",
+        "switch_target",
+        "export_schedule_csv",
+        "show_element",
+        "select_elements",
+        "activate_view",
+    }
+    assert len([t for t in TOOLS if t.wave == "M3"]) == len(shipped) - 8 - len(m4)
     run_modify = get("run_modify")
     assert (run_modify.risk, run_modify.destructive, run_modify.remote_op) == (
         "never_auto",
@@ -103,13 +111,16 @@ def test_prompts_and_resources_of_rvt_mcp_have_a_fate() -> None:
     assert all(r.uri.startswith("rift://") for r in RESOURCES)
 
 
-def test_a_prompt_cannot_take_over_an_excluded_counterpart() -> None:
+def test_a_prompt_cannot_take_over_an_excluded_counterpart(monkeypatch: pytest.MonkeyPatch) -> None:
+    from rift_mcp import registry
     from rift_mcp.registry import PROMPTS, PromptSpec, validate_surfaces
 
     stairs = PromptSpec("stairs", "M4", "x", ("rvt-mcp:revit_stairs",))
     with pytest.raises(RegistryError, match="excluded"):
         validate_surfaces((*PROMPTS, stairs))
-    shipped_early = dataclasses.replace(PROMPTS[3], status="implemented")  # getting_started, M4
+    # getting_started (M4) shipped while M3 was the current wave.
+    monkeypatch.setattr(registry, "CURRENT_WAVE", "M3")
+    shipped_early = dataclasses.replace(PROMPTS[3], status="implemented")
     with pytest.raises(RegistryError, match="not started"):
         validate_surfaces((shipped_early,))
 

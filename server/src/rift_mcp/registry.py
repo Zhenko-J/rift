@@ -24,7 +24,7 @@ Status = Literal["implemented", "designed"]
 Wave = Literal["M1", "M2", "M3", "M4"]
 
 WAVES: tuple[Wave, ...] = ("M1", "M2", "M3", "M4")
-CURRENT_WAVE: Wave = "M3"
+CURRENT_WAVE: Wave = "M4"
 
 WAVE_TITLES: dict[str, str] = {
     "M1": "read-only end to end",
@@ -157,10 +157,24 @@ def _write(
     )
 
 
-def _ask(name: str, wave: Wave, toolset: str, description: str, *origin: str) -> ToolSpec:
+def _ask(
+    name: str,
+    wave: Wave,
+    toolset: str,
+    description: str,
+    *origin: str,
+    status: Status = "designed",
+) -> ToolSpec:
     """A bounded side effect (file written, UI changed, target switched): ``ask``."""
     return ToolSpec(
-        name, wave, toolset, "ask", description, f"tool:{name}", origin=origin or ("rift",)
+        name,
+        wave,
+        toolset,
+        "ask",
+        description,
+        f"tool:{name}",
+        origin=origin or ("rift",),
+        status=status,
     )
 
 
@@ -672,18 +686,23 @@ TOOLS: tuple[ToolSpec, ...] = (
         "M4",
         "targets",
         "auto",
-        "Revit instances served on this machine.",
+        "Revit instances served by the RIFT add-in on this machine (pid, Revit version, add-in "
+        "and protocol versions, start time) and the one pinned by switch_target. Read on this "
+        "machine, Revit is not called.",
         "tool:targets.list",
         read_only=True,
         idempotent=True,
         origin=("rvt-mcp:revit_list_available_targets", "pyrevit:list_revit_installations"),
+        status="implemented",
     ),
     _ask(
         "switch_target",
         "M4",
         "targets",
-        "Pin the Revit instance to talk to.",
+        "Pin the Revit instance every later call goes to (pid from list_targets; no pid unpins) "
+        "and return its context.",
         "rvt-mcp:revit_switch_target",
+        status="implemented",
     ),
     _ask(
         "export_pdf", "M4", "exports", "Export sheets or views to PDF.", "rvt-mcp:revit_export_pdf"
@@ -704,8 +723,10 @@ TOOLS: tuple[ToolSpec, ...] = (
         "export_schedule_csv",
         "M4",
         "exports",
-        "Export a schedule to CSV.",
+        "Export a schedule's rows as displayed to a CSV file (UTF-8 with BOM) in a folder the "
+        "user chose; an existing file is kept unless overwrite is true. Reads the model only.",
         "rvt-mcp:revit_export_schedule_csv",
+        status="implemented",
     ),
     _ask(
         "open_document",
@@ -750,13 +771,27 @@ TOOLS: tuple[ToolSpec, ...] = (
         "show_element",
         "M4",
         "ui",
-        "Zoom to an element in a view.",
+        "Select elements and zoom the active view on them. The model does not change.",
         "rvt-mcp:revit_show_element_in_view",
+        status="implemented",
     ),
     _ask(
-        "select_elements", "M4", "ui", "Set the Revit selection.", "rvt-mcp:revit_select_elements"
+        "select_elements",
+        "M4",
+        "ui",
+        "Set the Revit selection (an empty list clears it). The model does not change.",
+        "rvt-mcp:revit_select_elements",
+        status="implemented",
     ),
-    _ask("activate_view", "M4", "ui", "Make a view active.", "rvt-mcp:revit_activate_view"),
+    _ask(
+        "activate_view",
+        "M4",
+        "ui",
+        "Ask Revit to make a view active; it switches once the call has returned. The model does "
+        "not change.",
+        "rvt-mcp:revit_activate_view",
+        status="implemented",
+    ),
 )
 
 
@@ -843,6 +878,7 @@ PROMPTS: tuple[PromptSpec, ...] = (
         "What RIFT can do in this Revit session, which tools are automatic and which ask, and "
         "how to work on a SANDBOX copy.",
         ("rvt-mcp:revit_getting_started",),
+        status="implemented",
     ),
 )
 
