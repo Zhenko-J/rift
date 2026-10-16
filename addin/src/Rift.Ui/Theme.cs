@@ -56,6 +56,8 @@ public static class Theme
         public const double StrokeWidth = 2;
         public const double CardMinWidth = 260;
         public const double CardMaxWidth = 420;
+        public const double HitMin = 44;
+        public const double Gutter = 12;
     }
 
     public static class Radius

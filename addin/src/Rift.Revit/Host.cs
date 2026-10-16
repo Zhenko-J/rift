@@ -13,6 +13,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
 using Rift.Core;
+using Rift.Core.Activity;
 using Rift.Core.Config;
 using Rift.Core.Control;
 using Rift.Core.Discovery;
@@ -20,6 +21,7 @@ using Rift.Core.Jobs;
 using Rift.Core.Journal;
 using Rift.Core.Lease;
 using Rift.Core.Logging;
+using Rift.Core.Policy;
 using Rift.Core.Protocol;
 using Rift.Core.Protocol.Ops;
 using Rift.Core.Security;
@@ -33,6 +35,7 @@ using Rift.Scripting.Python;
 using Rift.Scripting.Runs;
 using Rift.Scripting.Tools;
 using Rift.Ui;
+using Rift.Ui.Windows;
 
 namespace Rift.Revit;
 
@@ -42,7 +45,7 @@ namespace Rift.Revit;
 /// thread, timeout self-check included), the run journal, the router (lease, job, context, compile, run, tool), the listener
 /// and the activity card; M2 adds the write guard, the Keep/Discard dialog and the per-document history.
 /// </summary>
-public sealed class Host : IDisposable
+public sealed class Host : IDisposable, IUiHost
 {
     private static readonly string[] s_capabilities = { "context", "lease", "job", "compile", "run", "tool" };
     private static readonly string s_root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Brand.Id);
@@ -56,6 +59,8 @@ public sealed class Host : IDisposable
     private LeaseManager? _lease;
     private PauseGate? _pause;
     private ActivityCard? _card;
+    private readonly ActivityLog _activity = new();
+    private IntPtr _mainWindow;
     private RiftConfig _config = RiftConfig.Default;
     private Lazy<IronPythonEngine>? _engine;
     private RunJournal? _journal;
@@ -76,6 +81,7 @@ public sealed class Host : IDisposable
             + " alc=" + (System.Runtime.Loader.AssemblyLoadContext.GetLoadContext(typeof(Host).Assembly)?.Name ?? "?")
             + " revitapi_alc=" + (System.Runtime.Loader.AssemblyLoadContext.GetLoadContext(typeof(UIControlledApplication).Assembly)?.Name ?? "?"));
 
+        _mainWindow = app.MainWindowHandle;
         _config = RiftConfig.Load(Path.Combine(s_root, "config.json"), _log);
         try
         {
@@ -150,6 +156,8 @@ public sealed class Host : IDisposable
             },
             jobs, _dispatcher, () => new TargetInfo(pid, _secrets.Generation, null), _log,
             startTimeout: TimeSpan.FromSeconds(_config.StartTimeoutS), lease: _lease, pause: _pause);
+        // History (UI gate 3): one line per request, a long job updated in place when it ends.
+        router.Recorded += _activity.Upsert;
         router.Completed += (label, status, code, message) =>
         {
             if (code == ErrorCodes.LeaseHeld)
@@ -197,6 +205,14 @@ public sealed class Host : IDisposable
         _secrets?.Delete();
         _card?.Dispose();
         _card = null;
+        try
+        {
+            UiWindows.CloseAll();
+        }
+        catch (Exception ex)
+        {
+            _log.Write("windows close failed: " + ex.Message);
+        }
         if (_engine is { IsValueCreated: true } created)
         {
             try
@@ -213,8 +229,8 @@ public sealed class Host : IDisposable
 
     public void Dispose() => Stop();
 
-    /// <summary>Called by the Status ribbon button (which lives in the bootstrap assembly).</summary>
-    public string Status()
+    /// <summary>The Status text, kept as a fallback when the window cannot open and for the log.</summary>
+    public string StatusText()
     {
         PauseInfo? pause = _pause?.State;
         string server = pause is { State: ServerState.Paused }
@@ -245,6 +261,24 @@ public sealed class Host : IDisposable
                     // button changes at once (UI gate 3, uncertainty 4).
                     Ribbon.SetPaused(now.State == ServerState.Paused, now.SinceUtc);
                     return null;
+                case "status.open":
+                    try
+                    {
+                        UiWindows.Show("status", () => new StatusWindow(this, Owner(arg)));
+                        return null;
+                    }
+                    catch (Exception ex)
+                    {
+                        // The window is a convenience: the text still answers "who is connected".
+                        _log.Write("status window failed: " + ex);
+                        return StatusText();
+                    }
+                case "history.open":
+                    UiWindows.Show("history", () => new HistoryWindow(this, Owner(arg)));
+                    return null;
+                case "tools.open":
+                    UiWindows.Show("tools", () => new ToolsWindow(ToolCatalog.Load(), Owner(arg)));
+                    return null;
                 default:
                     return Brand.Product + ": unknown command " + command;
             }
@@ -256,11 +290,42 @@ public sealed class Host : IDisposable
         }
     }
 
-    /// <summary>Whether the activity card is shown (the Status dialog offers the switch).</summary>
-    public bool ActivityCardEnabled => _card?.Enabled ?? _config.ActivityCard;
+    StatusSnapshot IUiHost.Status()
+    {
+        PauseInfo? pause = _pause?.State;
+        LeaseHolder? holder = _lease?.Holder;
+        CoexistenceReport others = Coexistence.Detect(RevitRunHost.LoadedAssemblyNames(), _config.AgentPatterns);
+        var names = new System.Collections.Generic.List<string>();
+        if (others.PyRevitLoaded)
+        {
+            names.Add("pyRevit");
+        }
+        names.AddRange(others.OtherAgents);
+        string? coexistence = names.Count == 0 ? null : string.Join(", ", names);
+        return new StatusSnapshot(_version, pause is { State: ServerState.Paused }, pause?.SinceUtc, _listener?.PipeName, _listener?.Served ?? 0,
+            holder is null ? null : holder.Name + " " + holder.Version, holder?.Since, _lease?.Until, _secrets?.Generation ?? 0, _lastRefusal,
+            EngineLine(), _card?.Enabled ?? _config.ActivityCard, _log.Path, coexistence);
+    }
 
-    /// <summary>Path of this session's add-in log (shown and copied by the Status dialog).</summary>
-    public string? LogPath => _log.Path;
+    ActivitySnapshot IUiHost.Activity() => _activity.Snapshot();
+
+    void IUiHost.TogglePause() => Invoke("server.toggle", null);
+
+    /// <summary>The owner of a window: the command's Revit main window, else the one seen at start-up.</summary>
+    private IntPtr Owner(object? arg)
+    {
+        try
+        {
+            if (arg is UIApplication uiapp && uiapp.MainWindowHandle != IntPtr.Zero)
+            {
+                _mainWindow = uiapp.MainWindowHandle;
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Autodesk.Revit.Exceptions.ApplicationException)
+        {
+        }
+        return _mainWindow;
+    }
 
     /// <summary>Switches the activity card and remembers the choice in <c>config.json</c> (ADR-023).</summary>
     public void SetActivityCard(bool enabled)
@@ -384,6 +449,8 @@ public sealed class Host : IDisposable
             return;
         }
         string message = reason.ToString();
+        _activity.Upsert(new RequestRecord(_activity.NextKey(), DateTimeOffset.UtcNow, "request", ResponseEnvelope.ErrorStatus, ErrorCodes.Unauthorized,
+            message, 0, null, null));
         EnqueueUi(_ => _card?.Show(CardContent.Result("request", ResponseEnvelope.ErrorStatus, ErrorCodes.Unauthorized, message)));
     }
 

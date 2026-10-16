@@ -40,7 +40,15 @@ internal static partial class Ribbon
     internal const string StatusTip = "who is connected, since when, and where the log is";
     internal const string StatusLong =
         "shows the add-in version, the server state, the pipe, the client holding the lease, the last refusal and the script engine\n"
-        + "holds the activity card switch and copies the log path: the add-in never opens a program";
+        + "holds the pause, the activity card switch and copies the log path: the add-in never opens a program";
+    internal const string HistoryTip = "what the assistant asked for during this session";
+    internal const string HistoryLong =
+        "one line per call: time, tool, result, code and duration, with what a kept change added, modified or deleted\n"
+        + "never the script text and never model values; the history is not kept once Revit closes";
+    internal const string ToolsTip = "the tools the assistant can call, and their risk";
+    internal const string ToolsLong =
+        "full pastille = shipped, hollow = planned; auto tools only read, ask tools need your approval in the assistant\n"
+        + "the same catalogue as the README and the pamphlet";
     internal const string ProbeTip = "developer check of the embedded IronPython 3.4 engine";
     internal const string ProbeLong = "shown only with developer: true in config.json\nreads nothing from the model and changes nothing";
 
@@ -85,6 +93,24 @@ internal static partial class Ribbon
         };
         SetImages(status, Icons.Gauge, ink);
         Add(panel, status, Icons.Gauge);
+
+        var history = new PushButtonData(Brand.Id + ".history", "history", bootstrapPath, "Rift.Addin.HistoryCommand")
+        {
+            ToolTip = HistoryTip,
+            LongDescription = HistoryLong,
+            AvailabilityClassName = Availability,
+        };
+        SetImages(history, Icons.History, ink);
+        Add(panel, history, Icons.History);
+
+        var tools = new PushButtonData(Brand.Id + ".tools", "tools", bootstrapPath, "Rift.Addin.ToolsCommand")
+        {
+            ToolTip = ToolsTip,
+            LongDescription = ToolsLong,
+            AvailabilityClassName = Availability,
+        };
+        SetImages(tools, Icons.List, ink);
+        Add(panel, tools, Icons.List);
 
         if (developer)
         {

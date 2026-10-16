@@ -8,12 +8,12 @@ Chantier séparé ouvert le 2026-10-12 en application d'ADR-026 §5. Il a ses pr
 - Porte 4 — Plan de tranches : APPROUVÉE 2026-10-13 (`04-tranches.md`) — 6 tranches, balle traçante = pause de bout en bout ; aucune n'ouvre avant la livraison de M2 (prochaine étape du chantier : tranche 1, après M2)
 
 ## Tranches
-- [ ] Tranche 1 — balle traçante : un clic met l'assistant en pause, la carte le dit (`Rift.Ui`, `PauseGate`, ruban dans `Rift.Revit`, `PAUSED` côté client)
-- [ ] Tranche 2 — le panneau complet, avec ses icônes (Lucide, `developer`, carte mémorisée)
-- [ ] Tranche 3 — le kit Z_D01 et la fenêtre Status
-- [ ] Tranche 4 — History : ce que l'assistant a fait pendant la séance
-- [ ] Tranche 5 — Tools, recette complète et clôture (hors reçus)
-- [ ] Tranche 6 — reçus de changement dans History (après M2)
+- [x] Tranche 1 — balle traçante : un clic met l'assistant en pause, la carte le dit (`Rift.Ui`, `PauseGate`, ruban dans `Rift.Revit`, `PAUSED` côté client)
+- [~] Tranche 2 — le panneau complet, avec ses icônes (Lucide, `developer`, carte mémorisée)
+- [~] Tranche 3 — le kit Z_D01 et la fenêtre Status
+- [~] Tranche 4 — History : ce que l'assistant a fait pendant la séance
+- [~] Tranche 5 — Tools, recette complète et clôture (hors reçus)
+- [~] Tranche 6 — reçus de changement dans History (après M2)
 
 ## Cible (point de départ de la porte 1)
 
@@ -48,3 +48,10 @@ Status avec interrupteur de carte, `Ui/Theme.cs` appliqué à la carte, icônes 
 - **Écarts.** `Icons.cs` reste dans `Rift.Revit` (déplacement en tranche 2) ; la carte n'a pas encore l'ombre ni l'interlettrage (tranche 3) ; le libellé du bouton tient sur deux lignes (`server` / `on`) pour rester dans la largeur d'un grand bouton ; le ruban est rafraîchi à la fois directement dans la commande et par `Changed` (incertitude 4 : on garde les deux).
 - **Reste : recette 23 dans Revit** (copie SANDBOX) — clic `server on` → `paused`, dix `get_context` → dix `PAUSED`, aucune ligne `execute op=` pendant la pause, second clic → l'appel suivant passe ; carte servie depuis `Rift.Ui` (incertitude 1) ; infobulles lues au survol.
 - **2026-10-16 — recette 23 dans Revit 2026.3** (add-in `0.1.0+fa54c72`, copie SANDBOX, un seul client). Démarrage : `alc=rift`, ruban `NORN/RIFT` construit, **carte créée depuis `Rift.Ui` sans erreur** (incertitude 1 levée : un second assembly WPF du contexte `rift` se charge dans Revit). Clic du mainteneur sur `server on` → journal `server paused by you` ; dix `get_context` envoyés aussitôt → **dix `PAUSED`** (3 à 7 ms chacun, 44 ms au total) ; **aucune ligne `execute op=`** entre la pause et la reprise ; second clic → `server resumed`, l'appel suivant reprend le bail et passe (`ok`, 23 ms). Critère 1 du produit tenu. Reste à consigner par le mainteneur : aspect du bouton (libellé et icône permutés), infobulles et descriptions longues au survol, carte « paused by you » à pastille vide puis « resumed ».
+
+## Tranches 2 à 6 — code (2026-10-16)
+
+- **Fait, hors Revit.** Ruban : boutons `history` (Lucide `history`) et `tools` (Lucide `list`), infobulles et descriptions longues, utilisables sans document ; commandes `StatusCommand`, `HistoryCommand`, `ToolsCommand` relayées par `App.Invoke` (`status.open`, `history.open`, `tools.open`), réflexions devenues inutiles retirées d'`App`. Cœur : `Rift.Core/Activity/ActivityLog.cs` (`RequestRecord`, `ChangeSummary` lu dans `result.changes.by_category`, anneau de 500, mise à jour en place par clé, une ligne finie ne repasse jamais en cours), `RequestRouter.Recorded` (un enregistrement par requête, aucun pour `op: job`, second enregistrement sous la même clé à `Job.Finished`). `Rift.Ui` : kit `Kit/Z.cs` (carte, numéral, micro-libellé interlettré à 0,2 em, aparté, valeur, pastille et grille de 7, tuile en creux, bouton fantôme 44 px), `Views.cs` (`StatusSnapshot`, `IUiHost`, `HistoryView`, `ToolCatalog` lu dans `tools.json` embarqué), `Windows/` (`RiftWindow` : non modale, propriétaire Revit, Échap ferme, rafraîchie seulement quand l'empreinte change ; `UiWindows` : une instance par fenêtre ; `StatusWindow`, `HistoryWindow`, `ToolsWindow`). Hôte : implémente `IUiHost`, journal d'activité alimenté par le routeur et par les refus d'authentification (sous la même limite de 2 s que la carte), fenêtres fermées à l'arrêt ; Status retombe sur le texte si la fenêtre ne s'ouvre pas.
+- **Tests.** `ActivityTests` : clé unique mise à jour en place, anneau, reçus par catégorie, routeur (une ligne par requête, jamais le sondage, job long accepté puis fini sous la même clé), formats de History, catalogue embarqué = fichier du pamphlet, les trois fenêtres construisent leur corps sans Revit. 386 xUnit.
+- **Écarts.** Pas de bouton `card` dans le ruban : l'interrupteur reste dans Status ; `Icons.cs` reste dans `Rift.Revit` ; ombre de la carte et `ReduceMotion` non faits ; pas de capture Z_D01 automatique (ZAudit).
+- **Reste : recettes 24 à 28 dans Revit** (copie SANDBOX) — ouvrir Status, History et Tools ; un `run_modify` gardé → la ligne History montre les mêmes comptes que la réponse ; un `run_query` long qui finit sans être sondé ; rafale de 20 appels ; captures.

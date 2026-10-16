@@ -20,11 +20,7 @@ public sealed class App : IExternalApplication
 
     private static MethodInfo? s_stop;
     private static MethodInfo? s_invoke;
-    private static MethodInfo? s_status;
     private static MethodInfo? s_probePython;
-    private static MethodInfo? s_setActivityCard;
-    private static PropertyInfo? s_activityCardEnabled;
-    private static PropertyInfo? s_logPath;
 
     public Result OnStartup(UIControlledApplication application)
     {
@@ -38,11 +34,7 @@ public sealed class App : IExternalApplication
             Host = Activator.CreateInstance(hostType) ?? throw new InvalidOperationException("Host could not be created");
             s_stop = hostType.GetMethod("Stop");
             s_invoke = hostType.GetMethod("Invoke");
-            s_status = hostType.GetMethod("Status");
             s_probePython = hostType.GetMethod("ProbePython");
-            s_setActivityCard = hostType.GetMethod("SetActivityCard");
-            s_activityCardEnabled = hostType.GetProperty("ActivityCardEnabled");
-            s_logPath = hostType.GetProperty("LogPath");
             // The ribbon is built by the host (ADR-029 §1); it only needs this assembly's path for the commands.
             hostType.GetMethod("Start")!.Invoke(Host, new object[] { application, Path.Combine(dir, "Rift.Addin.dll") });
             return Result.Succeeded;
@@ -82,56 +74,6 @@ public sealed class App : IExternalApplication
         {
             BootstrapLog.Write("Invoke " + command + " failed: " + ex);
             return Brand.Product + ": " + command + " failed: " + ex.Message;
-        }
-    }
-
-    internal static string StatusText()
-    {
-        try
-        {
-            return s_status?.Invoke(Host, null) as string ?? Brand.Product + ": host not loaded";
-        }
-        catch (Exception ex)
-        {
-            return Brand.Product + ": status failed: " + ex.Message;
-        }
-    }
-
-    internal static bool ActivityCardEnabled()
-    {
-        try
-        {
-            return s_activityCardEnabled?.GetValue(Host) is true;
-        }
-        catch (Exception ex)
-        {
-            BootstrapLog.Write("ActivityCardEnabled failed: " + ex.Message);
-            return false;
-        }
-    }
-
-    internal static void SetActivityCard(bool enabled)
-    {
-        try
-        {
-            s_setActivityCard?.Invoke(Host, new object[] { enabled });
-        }
-        catch (Exception ex)
-        {
-            BootstrapLog.Write("SetActivityCard failed: " + ex.Message);
-        }
-    }
-
-    internal static string? LogPath()
-    {
-        try
-        {
-            return s_logPath?.GetValue(Host) as string;
-        }
-        catch (Exception ex)
-        {
-            BootstrapLog.Write("LogPath failed: " + ex.Message);
-            return null;
         }
     }
 

@@ -30,6 +30,12 @@ internal static class Icons
     /// <summary>Lucide "pause": the server toggle while paused.</summary>
     public const string Pause = "pause";
 
+    /// <summary>Lucide "history": the History button.</summary>
+    public const string History = "history";
+
+    /// <summary>Lucide "list": the Tools button (the catalogue).</summary>
+    public const string List = "list";
+
     /// <summary>Z#D01 ink <c>#191918</c>, on Revit's light theme (the theme file arrives with the UI work stream).</summary>
     public static readonly Color InkOnLight = Color.FromRgb(0x19, 0x19, 0x18);
 
@@ -61,6 +67,21 @@ internal static class Icons
         {
             "M15 4 H17 A1 1 0 0 1 18 5 V19 A1 1 0 0 1 17 20 H15 A1 1 0 0 1 14 19 V5 A1 1 0 0 1 15 4 Z",
             "M7 4 H9 A1 1 0 0 1 10 5 V19 A1 1 0 0 1 9 20 H7 A1 1 0 0 1 6 19 V5 A1 1 0 0 1 7 4 Z",
+        },
+        [History] = new[]
+        {
+            "M3 12 A9 9 0 1 0 12 3 A9.75 9.75 0 0 0 5.26 5.74 L3 8",
+            "M3 3 V8 H8",
+            "M12 7 V12 L16 14",
+        },
+        [List] = new[]
+        {
+            "M3 6 H3.01",
+            "M3 12 H3.01",
+            "M3 18 H3.01",
+            "M8 6 H21",
+            "M8 12 H21",
+            "M8 18 H21",
         },
     };
 

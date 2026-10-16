@@ -43,6 +43,30 @@ public sealed class ServerToggleCommand : RelayCommand
     protected override string Command => "server.toggle";
 }
 
+/// <summary>The Status window (UI gate 3): server state, client, pipe, engine, pause, activity card switch, log path.</summary>
+[Transaction(TransactionMode.Manual)]
+[Regeneration(RegenerationOption.Manual)]
+public sealed class StatusCommand : RelayCommand
+{
+    protected override string Command => "status.open";
+}
+
+/// <summary>The History window (UI gate 3): every call of the session with its result and change receipt.</summary>
+[Transaction(TransactionMode.Manual)]
+[Regeneration(RegenerationOption.Manual)]
+public sealed class HistoryCommand : RelayCommand
+{
+    protected override string Command => "history.open";
+}
+
+/// <summary>The Tools window (UI gate 3): the tool catalogue with its waves and risks.</summary>
+[Transaction(TransactionMode.Manual)]
+[Regeneration(RegenerationOption.Manual)]
+public sealed class ToolsCommand : RelayCommand
+{
+    protected override string Command => "tools.open";
+}
+
 /// <summary>Keeps the server and status buttons usable with no document open (Revit greys out commands otherwise).</summary>
 public sealed class AlwaysAvailable : IExternalCommandAvailability
 {

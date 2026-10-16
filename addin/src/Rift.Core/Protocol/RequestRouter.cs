@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Text.Json.Nodes;
 using System.Threading;
 
+using Rift.Core.Activity;
 using Rift.Core.Control;
 using Rift.Core.Jobs;
 using Rift.Core.Json;
@@ -68,6 +69,15 @@ public sealed class RequestRouter : IRequestHandler
     /// </summary>
     public event Action<string, string, string?, string?>? Completed;
 
+    /// <summary>
+    /// The same requests as one <see cref="RequestRecord"/> each for the session's activity (History, UI gate 3): a request
+    /// that became a job is recorded once as <c>accepted</c> and again, with the same key, when the job finishes.
+    /// Not raised for <c>op: job</c> (polling). Never raised under a lock.
+    /// </summary>
+    public event Action<RequestRecord>? Recorded;
+
+    private long _sequence;
+
     /// <summary>The MCP tool name carried in <c>client.tool</c>, or the op when the client did not send one.</summary>
     public static string LabelOf(RequestEnvelope request)
     {
@@ -121,8 +131,31 @@ public sealed class RequestRouter : IRequestHandler
             return ResponseEnvelope.Fail(null, code!, null, SafeTarget(), sw.ElapsedMilliseconds);
         }
         ResponseEnvelope response = Handle(request, sw, cancellation);
-        Completed?.Invoke(LabelOf(request), response.Status, response.Error?.Code, response.Error?.Message);
+        string label = LabelOf(request);
+        Completed?.Invoke(label, response.Status, response.Error?.Code, response.Error?.Message);
+        if (!string.Equals(request.Op, "job", StringComparison.Ordinal))
+        {
+            string key = response.Status == ResponseEnvelope.Accepted && response.Result?["job_id"] is JsonValue id && id.TryGetValue(out string? jobId)
+                ? jobId
+                : "r" + Interlocked.Increment(ref _sequence).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            Record(key, label, response);
+        }
         return response;
+    }
+
+    private void Record(string key, string label, ResponseEnvelope response)
+    {
+        try
+        {
+            Recorded?.Invoke(new RequestRecord(key, DateTimeOffset.UtcNow, label, response.Status, response.Error?.Code, response.Error?.Message,
+                response.ElapsedMs, response.Result?["outcome"] is JsonValue o && o.TryGetValue(out string? outcome) ? outcome : null,
+                ChangeSummary.From(response.Result)));
+        }
+        catch (Exception ex)
+        {
+            // The activity log is a convenience: it must never cost the client its answer.
+            _log.Write("activity record failed: " + ex.Message);
+        }
     }
 
     private ResponseEnvelope Handle(RequestEnvelope request, Stopwatch sw, CancellationToken cancellation)
@@ -172,6 +205,22 @@ public sealed class RequestRouter : IRequestHandler
             TimeSpan timeout = request.TimeoutS > 0 ? TimeSpan.FromSeconds(request.TimeoutS) : _defaultTimeout;
             if (!job.WaitFinished(timeout))
             {
+                // History gets the final line when the job ends, even if the client never polls it.
+                string label = LabelOf(request);
+                int recorded = 0;
+                void Final(Job j)
+                {
+                    if (Interlocked.Exchange(ref recorded, 1) == 0)
+                    {
+                        long ms = (long)((j.FinishedUtc ?? DateTimeOffset.UtcNow) - j.QueuedUtc).TotalMilliseconds;
+                        Record(j.Id, label, FromJob(request.Id, j, ms));
+                    }
+                }
+                job.Finished += Final;
+                if (job.State == JobState.Done)
+                {
+                    Final(job);
+                }
                 var accepted = new JsonObject { ["job_id"] = job.Id, ["progress"] = job.Progress.Percent, ["message"] = job.Progress.Message };
                 return new ResponseEnvelope(ProtocolVersion.Current, request.Id, ResponseEnvelope.Accepted, SafeTarget(), accepted, null, sw.ElapsedMilliseconds);
             }
