@@ -148,6 +148,12 @@ public static class PythonPolicy
 
         private void Name(int start, string? name, string what)
         {
+            // IronPython names the parameter of a generator expression itself (`__gen_$_parm__`): `$` cannot appear in an
+            // identifier a script writes, so such a name is the compiler's, not the script's.
+            if (name is not null && name.Contains('$', StringComparison.Ordinal))
+            {
+                return;
+            }
             if (name is not null && NameRefusal(name, _refused) is { } reason)
             {
                 Add(start, what, reason);

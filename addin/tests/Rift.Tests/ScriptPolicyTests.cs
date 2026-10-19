@@ -274,6 +274,47 @@ result = [repr(Box(2)), math.floor(2.5), c['a'], bool(re.match(r'\d', '7')), __n
         Assert.Equal("[\"Box(2)\",2,2,true,true]", r.Value!.ToJsonString());
     }
 
+    [Fact]
+    public void Common_python_constructs_pass_the_policy()
+    {
+        // Found by the acceptance in Revit (2026-10-19): a generator expression was refused because IronPython names its
+        // parameter `__gen_$_parm__`.
+        RunResult r = Run("""
+import collections, functools
+class Base:
+    def __init__(self, n):
+        self.n = n
+class Child(Base):
+    def __init__(self, n):
+        super().__init__(n * 2)
+words = ['b', 'a', 'b']
+counts = collections.Counter(w for w in words)
+total = sum(len(w) for w in words if w)
+squares = {k: k * k for k in range(3)}
+unique = {w for w in words}
+nested = [(i, j) for i in range(2) for j in range(2)]
+key = sorted(words, key=lambda w: (w, len(w)))
+def gen():
+    for i in (i for i in range(2)):
+        yield i
+class Ctx:
+    def __enter__(self):
+        return 5
+    def __exit__(self, *a):
+        return False
+with Ctx() as five:
+    pass
+try:
+    raise ValueError('x')
+except ValueError as e:
+    caught = str(e)
+label = f"{Child(2).n}-{counts['b']}"
+result = [label, total, squares[2], len(unique), len(nested), key[0], list(gen()), five, caught, functools.reduce(lambda a, b: a + b, [1, 2])]
+""");
+        Assert.True(r.Error is null, r.Error?.Message);
+        Assert.Equal("[\"4-2\",3,4,2,4,\"a\",[0,1],5,\"x\",3]", r.Value!.ToJsonString());
+    }
+
     [Theory]
     [InlineData("PostCommand", "deferred code")]
     [InlineData("OpenDocumentFile", "open, create or copy documents")]
