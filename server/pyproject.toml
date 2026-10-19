@@ -1,6 +1,6 @@
 [project]
 name = "rift-mcp"
-version = "0.0.1"
+version = "1.0.0"
 description = "MCP server for Autodesk Revit — local, HMAC-authenticated, with model-level guard rails"
 readme = "README.md"
 requires-python = ">=3.13"

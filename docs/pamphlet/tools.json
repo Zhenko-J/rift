@@ -1,6 +1,6 @@
 {
   "server": "rift",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "protocol": "2.0",
   "current_wave": "M4",
   "waves": [
