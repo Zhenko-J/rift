@@ -166,6 +166,26 @@ async def selftest(client: Caller, *, write: bool = False, keep: bool = False) -
             return "import ctypes refused"
         raise AssertionError("import ctypes was not refused")
 
+    async def deferred_code_refused() -> str:
+        # ADR-036 (F-R1): a Revit event handler would run after the run and its guard.
+        script = "def later(sender, args):\n    pass\nuiapp.Idling += later\n"
+        out = await _run_query.run_query(client, _run_query.RunQueryInput(script=script))
+        assert out.get("ok") is False, out
+        message = out["error"]["message"]
+        assert message.startswith("PolicyError") and "Idling" in message, message
+        return "Idling subscription refused before compilation"
+
+    async def system_facade() -> str:
+        # ADR-036 (F-R2): no files, environment or reflection behind System.
+        script = (
+            "result = [hasattr(System, 'IO'), hasattr(System, 'Environment'), "
+            "hasattr(System, 'Math')]\n"
+        )
+        out = await _run_query.run_query(client, _run_query.RunQueryInput(script=script))
+        assert out["run"]["outcome"] == "ok", out["run"].get("outcome")
+        assert out["run"]["result"] == [False, False, True], out["run"]["result"]
+        return "System.IO and System.Environment absent, System.Math present"
+
     async def timeout() -> str:
         try:
             await _run_query.run_query(
@@ -185,6 +205,8 @@ async def selftest(client: Caller, *, write: bool = False, keep: bool = False) -
         ("run_query", query_ok),
         ("read_guard_write_in_query", guarded_check(query_write_is_rolled_back)),
         ("import_guard", import_guard),
+        ("deferred_code_refused", deferred_code_refused),
+        ("system_facade", system_facade),
         ("cooperative_timeout", guarded_check(timeout)),
         ("audit_template_all", audit_all),
     ):

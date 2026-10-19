@@ -91,8 +91,8 @@ public sealed class BakedOp : IToolHandler
                     request.Args?["timeout_s"] is JsonValue t && t.TryGetValue(out int ts) ? ts : 120, 1, RunArgs.MaxTimeoutS));
                 string title = "baked: " + c.Name;
                 JsonObject run = c.Mode == "modify"
-                    ? _runner.RunFixedModify(request, "baked:" + c.Name, c.Script, title, scriptInputs, timeout, null, progress, cancellation)
-                    : _runner.RunFixed(request, "baked:" + c.Name, c.Script, title, timeout, scriptInputs, null, progress, cancellation);
+                    ? _runner.RunFixedModify(request, "baked:" + c.Name, c.Script, title, scriptInputs, timeout, null, progress, cancellation, ScriptTrust.Agent)
+                    : _runner.RunFixed(request, "baked:" + c.Name, c.Script, title, timeout, scriptInputs, null, progress, cancellation, ScriptTrust.Agent);
                 JsonNode? value = run["result"]?.DeepClone();
                 run.Remove("result");
                 return new JsonObject { ["command"] = c.Name, ["mode"] = c.Mode, ["sha256"] = c.Sha256, ["result"] = value, ["run"] = run };

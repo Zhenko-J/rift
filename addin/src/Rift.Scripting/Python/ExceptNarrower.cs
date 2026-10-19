@@ -60,7 +60,7 @@ public static class ExceptNarrower
         return sb.ToString();
     }
 
-    private static PythonAst? Parse(ScriptEngine engine, string source)
+    internal static PythonAst? Parse(ScriptEngine engine, string source)
     {
         ScriptSource src = engine.CreateScriptSourceFromString(source, "<narrow>", SourceCodeKind.File);
         SourceUnit unit = HostingHelpers.GetSourceUnit(src);

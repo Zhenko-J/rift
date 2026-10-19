@@ -41,7 +41,7 @@ Test vectors for `mac` and `proof` are shared in `shared/schemas/test-vectors/hm
 | `health` | protocol version and pid (unsigned, see framing) | no |
 | `lease` | acquire or renew the single-client lease | no |
 | `context` | versions, document, open documents, active view, selection, levels, policy, session, coexistence, server state | yes |
-| `compile` | compile a script with the engine, return `ok` or `{line, column, message}` | no |
+| `compile` | compile a script with the engine, return `ok` or `{line, column, message}`, plus `type: "PolicyError"` when the script policy refused it (ADR-036) | no |
 | `run` | execute a script (`mode: query|modify`, `language`, `dry_run`, `policy`, `expected_document`, `document_path`, `title`, `inputs`, `timeout_s`, `async`) | yes |
 | `job` | state, progress and result of a running or finished job | no |
 | `tool` | a fixed tool or a preset (`inspect`, `show`, `capture`, `purge`, `document.*`, `audit.*`, `batch`) | depends |

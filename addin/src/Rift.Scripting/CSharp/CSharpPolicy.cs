@@ -181,6 +181,12 @@ public static class CSharpPolicy
         {
             return ownerReason;
         }
+        // ADR-036: posted commands, updaters, dockable panes and opening or copying documents act after or outside the guard.
+        if (owner is not null && symbol is not IEventSymbol && ScriptPolicy.DeferredMembers.Contains(symbol.Name)
+            && owner.ContainingNamespace?.ToDisplayString().StartsWith("Autodesk.Revit", StringComparison.Ordinal) == true)
+        {
+            return ScriptPolicy.Reason(symbol.Name, ScriptPolicy.Default);
+        }
         if (owner?.ToDisplayString() == "System.Type" && !s_typeMembers.Contains(symbol.Name))
         {
             return "reflection is not allowed (System.Type." + symbol.Name + ")";

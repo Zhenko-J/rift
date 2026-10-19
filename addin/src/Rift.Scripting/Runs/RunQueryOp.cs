@@ -77,9 +77,9 @@ public sealed class RunQueryOp : IOperationHandler
         JsonNode inputs = RunArgs.Inputs(request);
         if (mode == RunArgs.Modify)
         {
-            return RunModify(request, "run", language, script, RunArgs.Title(request, "modify"), timeout, inputs, null, progress, cancellation);
+            return RunModify(request, "run", language, script, RunArgs.Title(request, "modify"), timeout, inputs, null, ScriptTrust.Agent, progress, cancellation);
         }
-        return Run(request, "run", mode, language, script, RunArgs.Title(request), timeout, inputs, null, progress, cancellation);
+        return Run(request, "run", mode, language, script, RunArgs.Title(request), timeout, inputs, null, ScriptTrust.Agent, progress, cancellation);
     }
 
     /// <summary>
@@ -91,14 +91,19 @@ public sealed class RunQueryOp : IOperationHandler
     public JsonObject RunFixed(RequestEnvelope request, string op, string script, string title, TimeSpan timeout,
         IReadOnlyDictionary<string, object?> extras, IProgress<(int Percent, string Message)> progress, CancellationToken cancellation)
     {
-        return Run(request, op, RunArgs.Query, "python", script, title, timeout, new JsonObject(), extras, progress, cancellation);
+        return Run(request, op, RunArgs.Query, "python", script, title, timeout, new JsonObject(), extras, ScriptTrust.Shipped, progress, cancellation);
     }
 
-    /// <summary>A fixed read script with arguments (a typed read tool, M3): same path as <c>mode: query</c>, <paramref name="inputs"/> as <c>inputs</c>.</summary>
+    /// <summary>
+    /// A fixed read script with arguments (a typed read tool, M3; a baked command, ADR-034): same path as <c>mode: query</c>,
+    /// <paramref name="inputs"/> as <c>inputs</c>. <paramref name="trust"/> is <see cref="ScriptTrust.Agent"/> for a baked
+    /// command, which the assistant wrote (ADR-036).
+    /// </summary>
     public JsonObject RunFixed(RequestEnvelope request, string op, string script, string title, TimeSpan timeout, JsonObject inputs,
-        IReadOnlyDictionary<string, object?>? extras, IProgress<(int Percent, string Message)> progress, CancellationToken cancellation)
+        IReadOnlyDictionary<string, object?>? extras, IProgress<(int Percent, string Message)> progress, CancellationToken cancellation,
+        ScriptTrust trust = ScriptTrust.Shipped)
     {
-        return Run(request, op, RunArgs.Query, "python", script, title, timeout, inputs, extras ?? new Dictionary<string, object?>(), progress, cancellation);
+        return Run(request, op, RunArgs.Query, "python", script, title, timeout, inputs, extras ?? new Dictionary<string, object?>(), trust, progress, cancellation);
     }
 
     /// <summary>
@@ -107,15 +112,16 @@ public sealed class RunQueryOp : IOperationHandler
     /// history. Returns the run result, or throws like <see cref="Execute"/>.
     /// </summary>
     public JsonObject RunFixedModify(RequestEnvelope request, string op, string script, string title, JsonObject inputs, TimeSpan timeout,
-        IReadOnlyDictionary<string, object?>? extras, IProgress<(int Percent, string Message)> progress, CancellationToken cancellation)
+        IReadOnlyDictionary<string, object?>? extras, IProgress<(int Percent, string Message)> progress, CancellationToken cancellation,
+        ScriptTrust trust = ScriptTrust.Shipped)
     {
-        return RunModify(request, op, "python", script, title, timeout, inputs, extras, progress, cancellation);
+        return RunModify(request, op, "python", script, title, timeout, inputs, extras, trust, progress, cancellation);
     }
 
     // ── mode: query ──────────────────────────────────────────────────────────────────────────
 
     private JsonObject Run(RequestEnvelope request, string op, string mode, string language, string script, string title, TimeSpan timeout,
-        JsonNode inputs, IReadOnlyDictionary<string, object?>? extras, IProgress<(int Percent, string Message)> progress, CancellationToken cancellation)
+        JsonNode inputs, IReadOnlyDictionary<string, object?>? extras, ScriptTrust trust, IProgress<(int Percent, string Message)> progress, CancellationToken cancellation)
     {
         IScriptEngine engine = RequireTimeout(language);
         IRunHost host = _host();
@@ -132,7 +138,7 @@ public sealed class RunQueryOp : IOperationHandler
         result["policy_applied"] = "read_only";
         result["dry_run"] = false;
 
-        CompileResult compiled = CompileOrThrow(engine, script, result);
+        CompileResult compiled = CompileOrThrow(engine, script, result, trust);
         string? folder = DocumentFolder(target.Path);
         Begin(runId, op, script, mode, title, timeout, inputs, compiled, folder, result, null);
 
@@ -164,7 +170,7 @@ public sealed class RunQueryOp : IOperationHandler
     // ── mode: modify (M2) ────────────────────────────────────────────────────────────────────
 
     private JsonObject RunModify(RequestEnvelope request, string op, string language, string script, string title, TimeSpan timeout, JsonNode inputs,
-        IReadOnlyDictionary<string, object?>? extras, IProgress<(int Percent, string Message)> progress, CancellationToken cancellation)
+        IReadOnlyDictionary<string, object?>? extras, ScriptTrust trust, IProgress<(int Percent, string Message)> progress, CancellationToken cancellation)
     {
         bool dryRun = RunArgs.DryRun(request);
         string requested = RunArgs.Policy(request);
@@ -219,7 +225,7 @@ public sealed class RunQueryOp : IOperationHandler
         result["dry_run"] = dryRun;
         result["history_id"] = runId;
 
-        CompileResult compiled = CompileOrThrow(engine, script, result);
+        CompileResult compiled = CompileOrThrow(engine, script, result, trust);
         string? folder = DocumentFolder(target.Path);
         var extraArgs = new JsonObject { ["dry_run"] = dryRun, ["policy"] = requested, ["policy_applied"] = policy.Applied, ["allow_reference"] = allowReference };
         Begin(runId, op, script, RunArgs.Modify, title, timeout, inputs, compiled, folder, result, extraArgs);
@@ -329,14 +335,14 @@ public sealed class RunQueryOp : IOperationHandler
         ["document"] = new JsonObject { ["title"] = target.Title is null ? null : Sanitizer.Sanitize(target.Title, 260), ["class"] = target.DocumentClass },
     };
 
-    private static CompileResult CompileOrThrow(IScriptEngine engine, string script, JsonObject result)
+    private static CompileResult CompileOrThrow(IScriptEngine engine, string script, JsonObject result, ScriptTrust trust)
     {
-        CompileResult compiled = engine.Compile(script, "<agent-script>");
+        CompileResult compiled = engine.Compile(script, "<agent-script>", trust);
         if (!compiled.Ok)
         {
             result["outcome"] = "error";
             result["reason"] = "syntax_error";
-            string type = engine.Language == "csharp" ? "CompileError" : "SyntaxError";
+            string type = compiled.ErrorType ?? (engine.Language == "csharp" ? "CompileError" : "SyntaxError");
             result["error"] = new JsonObject { ["type"] = type, ["message"] = Sanitizer.Sanitize(compiled.Message, 2048), ["line"] = compiled.Line, ["column"] = compiled.Column };
             throw new OperationException(ErrorCodes.ScriptError, type + " at line " + compiled.Line.ToString(CultureInfo.InvariantCulture) + " (nothing was run)", result);
         }

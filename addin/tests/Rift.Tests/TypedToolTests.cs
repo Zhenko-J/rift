@@ -69,7 +69,7 @@ public sealed class TypedToolTests : IClassFixture<EngineFixture>, IDisposable
     public void Each_tool_compiles_and_imports_only_allowed_modules(string name)
     {
         TypedTool tool = TypedToolCatalog.Default.Find(name)!;
-        CompileResult compiled = _fixture.Engine.Compile(tool.Source, name + ".py");
+        CompileResult compiled = _fixture.Engine.Compile(tool.Source, name + ".py", ScriptTrust.Shipped);
         Assert.True(compiled.Ok, name + ": line " + (compiled.Line - TypedToolCatalog.PreludeLines) + " of the tool: " + compiled.Message);
         foreach (Match m in Regex.Matches(tool.Source, @"^\s*(?:import|from)\s+([\w.]+)", RegexOptions.Multiline))
         {

@@ -47,6 +47,10 @@ public sealed class CompileOp : IOperationHandler
             node["line"] = c.Line;
             node["column"] = c.Column;
             node["message"] = Sanitizer.Sanitize(c.Message, 2048);
+            if (c.ErrorType is not null)
+            {
+                node["type"] = c.ErrorType;
+            }
         }
         return node;
     }

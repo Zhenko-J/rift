@@ -70,6 +70,9 @@ public sealed class CSharpEngine : IScriptEngine
     /// <summary>Lines of the wrapper before the script's first line.</summary>
     private int HeaderLines => _shape.Usings.Count + 8;
 
+    /// <summary>Every C# script comes from a client: the allow-list applies whatever <paramref name="trust"/> says (ADR-035, ADR-036).</summary>
+    public CompileResult Compile(string source, string fileName, ScriptTrust trust) => Compile(source, fileName);
+
     public CompileResult Compile(string source, string fileName)
     {
         ArgumentNullException.ThrowIfNull(source);

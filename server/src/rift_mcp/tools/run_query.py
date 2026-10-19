@@ -57,8 +57,9 @@ class RunQueryInput(BaseModel):
 
 def compile_failure(language: str, check: dict[str, Any]) -> str:
     """The caller's message for a script that did not compile: its kind, line and reason (a C#
-    script refused by the allow-list names the refused symbols, ADR-035)."""
-    kind = "CompileError" if language == "csharp" else "SyntaxError"
+    script refused by the allow-list names the refused symbols, ADR-035; a Python script refused
+    by the script policy is a ``PolicyError``, ADR-036)."""
+    kind = check.get("type") or ("CompileError" if language == "csharp" else "SyntaxError")
     reason = str(check.get("message") or "").strip()
     return f"{kind} at line {check.get('line')}: {reason[:500]} (nothing was run)"
 

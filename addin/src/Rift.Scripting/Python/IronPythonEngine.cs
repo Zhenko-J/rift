@@ -29,6 +29,14 @@ namespace Rift.Scripting.Python;
 /// <see cref="Run"/> throws <see cref="TimeoutUnavailableException"/> before any line of the script executes.
 /// <c>sys.settrace</c> is replaced so that a script cannot remove the hook.
 /// </para>
+/// <para>
+/// ADR-036: an assistant's script (<see cref="ScriptTrust.Agent"/>) is checked by <see cref="PythonPolicy"/> before it is
+/// compiled and runs with the restrictions of <see cref="ImportGuard"/> (façade <c>System</c>, no <c>open</c>, copies of
+/// modules, guarded <c>getattr</c>). Between two runs a sentinel trace hook stays installed on the run thread: Python code
+/// that runs there outside a run — a handler or callback a script left behind (F-R1) — is stopped at its first line and
+/// counted (<see cref="DeferredCodeStops"/>, <see cref="DeferredCodeStopped"/>). The C# engine does the same with its
+/// checkpoints (ADR-035 §3).
+/// </para>
 /// </summary>
 public sealed class IronPythonEngine : IScriptEngine
 {
@@ -48,16 +56,30 @@ _sys.setprofile = _refuse_settrace
     private readonly Action<ScriptEngine, TracebackDelegate?> _setTrace;
     private readonly int _maxOutputBytes;
     private readonly Dictionary<string, object?> _namespaces = new(StringComparer.Ordinal);
+    private readonly IReadOnlySet<string> _refused;
+    private readonly TracebackDelegate _betweenRuns;
+    private List<KeyValuePair<string, object>>? _facadeTypes;
     private CompiledCode? _liveProbe;
+    private volatile bool _running;
+    private int _deferredStops;
 
     public IronPythonEngine(IEnumerable<Assembly> assembliesToExpose, string? stdLibPath, int maxOutputBytes = BoundedWriter.DefaultMaxBytes)
-        : this(assembliesToExpose, stdLibPath, maxOutputBytes, null)
+        : this(assembliesToExpose, stdLibPath, maxOutputBytes, null, null)
+    {
+    }
+
+    /// <param name="refusedMembers">Member names refused in assistant scripts (ADR-036); <see cref="ScriptPolicy.Default"/> when null.</param>
+    public IronPythonEngine(IEnumerable<Assembly> assembliesToExpose, string? stdLibPath, IReadOnlySet<string>? refusedMembers)
+        : this(assembliesToExpose, stdLibPath, BoundedWriter.DefaultMaxBytes, null, refusedMembers)
     {
     }
 
     /// <param name="setTrace">Test seam: how the trace hook is installed. A neutralised hook must make every run refused.</param>
-    internal IronPythonEngine(IEnumerable<Assembly> assembliesToExpose, string? stdLibPath, int maxOutputBytes, Action<ScriptEngine, TracebackDelegate?>? setTrace)
+    internal IronPythonEngine(IEnumerable<Assembly> assembliesToExpose, string? stdLibPath, int maxOutputBytes, Action<ScriptEngine, TracebackDelegate?>? setTrace,
+        IReadOnlySet<string>? refusedMembers = null)
     {
+        _refused = refusedMembers ?? ScriptPolicy.Default;
+        _betweenRuns = BetweenRuns;
         var options = new Dictionary<string, object>
         {
             ["Tracing"] = true,
@@ -77,6 +99,11 @@ _sys.setprofile = _refuse_settrace
         _setTrace = setTrace ?? ((e, d) => e.SetTrace(d));
         _maxOutputBytes = maxOutputBytes;
         _engine.Runtime.LoadAssembly(typeof(object).Assembly);
+        // The assemblies behind the façade System (ADR-036): collections, LINQ, regular expressions.
+        _engine.Runtime.LoadAssembly(typeof(HashSet<>).Assembly);
+        _engine.Runtime.LoadAssembly(typeof(System.Linq.Enumerable).Assembly);
+        _engine.Runtime.LoadAssembly(typeof(System.Text.RegularExpressions.Regex).Assembly);
+        _engine.Runtime.LoadAssembly(typeof(System.Collections.ObjectModel.ObservableCollection<>).Assembly);
         foreach (Assembly asm in assembliesToExpose)
         {
             _engine.Runtime.LoadAssembly(asm);
@@ -101,6 +128,12 @@ _sys.setprofile = _refuse_settrace
     public int TraceEventsCompiledBefore { get; }
 
     public int TraceEventsCompiledAfter { get; }
+
+    /// <summary>How many times Python code left behind by a script was stopped outside a run (ADR-036, F-R1).</summary>
+    public int DeferredCodeStops => Volatile.Read(ref _deferredStops);
+
+    /// <summary>Raised on the run thread each time the sentinel stops deferred code, with the code's file and line.</summary>
+    public event Action<string>? DeferredCodeStopped;
 
     /// <summary>The hosted DLR engine (the import guard and the narrower use its parser).</summary>
     internal ScriptEngine Engine => _engine;
@@ -137,10 +170,20 @@ _sys.setprofile = _refuse_settrace
     /// <summary>Kept for the P-D4 probe and older callers: the AST-based <see cref="ExceptNarrower"/>.</summary>
     public static string NarrowBareExcept(string source) => ExceptNarrower.Narrow(source);
 
-    public CompileResult Compile(string source, string fileName)
+    public CompileResult Compile(string source, string fileName) => Compile(source, fileName, ScriptTrust.Agent);
+
+    public CompileResult Compile(string source, string fileName, ScriptTrust trust)
     {
         ArgumentNullException.ThrowIfNull(source);
         string sha = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))).ToLowerInvariant();
+        if (trust == ScriptTrust.Agent)
+        {
+            IReadOnlyList<PythonViolation> violations = PythonPolicy.Check(_engine, source, _refused);
+            if (violations.Count > 0)
+            {
+                return new CompileResult(false, null, violations[0].Line, 0, PythonPolicy.Message(violations)) { ErrorType = "PolicyError" };
+            }
+        }
         try
         {
             string narrowed = ExceptNarrower.Narrow(_engine, source);
@@ -148,7 +191,7 @@ _sys.setprofile = _refuse_settrace
             CompiledCode code = src.Compile();
             // Under late compilation the run recompiles the narrowed text with the hook active.
             object handle = LateCompile ? narrowed : code;
-            return new CompileResult(true, new CompiledScript(Language, sha, handle), 0, 0, null);
+            return new CompileResult(true, new CompiledScript(Language, sha, handle) { Trust = trust }, 0, 0, null);
         }
         catch (SyntaxErrorException ex)
         {
@@ -170,11 +213,28 @@ _sys.setprofile = _refuse_settrace
         }
         lock (_runLock)
         {
+            _running = true;
+            try
+            {
+                return RunLocked(script, context, timeout, cancellation);
+            }
+            finally
+            {
+                _running = false;
+                // ADR-036: what the script left behind cannot run on this thread once the run is over.
+                _setTrace(_engine, _betweenRuns);
+            }
+        }
+    }
+
+    private RunResult RunLocked(CompiledScript script, ScriptContext context, TimeSpan timeout, CancellationToken cancellation)
+    {
+        {
             var sw = Stopwatch.StartNew();
             var stdout = new BoundedWriter(_maxOutputBytes, context.Stdout);
             var stderr = new BoundedWriter(_maxOutputBytes, context.Stderr);
             var refused = new List<string>();
-            ScriptScope scope = PrepareScope(context, refused);
+            ScriptScope scope = PrepareScope(context, refused, script.Trust);
 
             ScriptScope sys = _engine.GetSysModule();
             object? oldOut = sys.GetVariable("stdout");
@@ -257,7 +317,7 @@ _sys.setprofile = _refuse_settrace
         _engine.Runtime.Shutdown();
     }
 
-    private ScriptScope PrepareScope(ScriptContext context, List<string> refused)
+    private ScriptScope PrepareScope(ScriptContext context, List<string> refused, ScriptTrust trust)
     {
         ScriptScope scope = _engine.CreateScope();
         scope.SetVariable("uiapp", context.UiApp);
@@ -266,12 +326,101 @@ _sys.setprofile = _refuse_settrace
         scope.SetVariable("doc", context.Doc);
         scope.SetVariable("inputs", PyResultConverter.ToPython(context.Inputs));
         scope.SetVariable("report_progress", context.ReportProgress);
+        if (trust == ScriptTrust.Shipped)
+        {
+            foreach (KeyValuePair<string, object?> extra in context.Extras)
+            {
+                scope.SetVariable(extra.Key, extra.Value is ScriptNamespace ns ? ResolveNamespace(ns.Name) : extra.Value);
+            }
+            ImportGuard.Install(scope, _engine, name => refused.Add(name), source => ExceptNarrower.Narrow(_engine, source));
+            return scope;
+        }
+
+        // ADR-036: an assistant's script. Code built from strings is checked like the script itself.
+        string CheckAndNarrow(string source)
+        {
+            IReadOnlyList<PythonViolation> violations = PythonPolicy.Check(_engine, source, _refused);
+            if (violations.Count > 0)
+            {
+                throw new ArgumentException(PythonPolicy.Message(violations));
+            }
+            return ExceptNarrower.Narrow(_engine, source);
+        }
+        var restrictions = new AgentRestrictions(name => PythonPolicy.NameRefusal(name, _refused), FacadeTypes());
+        object? facade = ImportGuard.Install(scope, _engine, name => refused.Add(name), CheckAndNarrow, restrictions);
         foreach (KeyValuePair<string, object?> extra in context.Extras)
         {
-            scope.SetVariable(extra.Key, extra.Value is ScriptNamespace ns ? ResolveNamespace(ns.Name) : extra.Value);
+            object? value = extra.Value is ScriptNamespace ns
+                ? (ns.Name == "System" ? facade : ns.Name.StartsWith("System.", StringComparison.Ordinal) ? null : ResolveNamespace(ns.Name))
+                : extra.Value;
+            scope.SetVariable(extra.Key, value);
         }
-        ImportGuard.Install(scope, _engine, name => refused.Add(name), source => ExceptNarrower.Narrow(_engine, source));
         return scope;
+    }
+
+    /// <summary>The types of the façade System (ADR-036), resolved once from the real namespace; missing names are left out.</summary>
+    private List<KeyValuePair<string, object>> FacadeTypes()
+    {
+        if (_facadeTypes is not null)
+        {
+            return _facadeTypes;
+        }
+        var found = new List<KeyValuePair<string, object>>();
+        object? system = ResolveNamespace("System");
+        if (system is not null)
+        {
+            foreach (string dotted in ImportGuard.SystemFacade)
+            {
+                object? node = system;
+                foreach (string part in dotted.Split('.'))
+                {
+                    if (node is null || !_engine.Operations.TryGetMember(node, part, out object? next))
+                    {
+                        node = null;
+                        break;
+                    }
+                    node = next;
+                }
+                if (node is not null)
+                {
+                    found.Add(new KeyValuePair<string, object>(dotted, node));
+                }
+            }
+        }
+        _facadeTypes = found;
+        return found;
+    }
+
+    /// <summary>
+    /// The sentinel between runs (ADR-036, F-R1): Python code of this engine that starts on the run thread while no run is
+    /// in progress was left behind by a script (an event handler, a callback). It is stopped at its first trace event, and
+    /// again at every later one, like a script past its deadline.
+    /// </summary>
+    private TracebackDelegate? BetweenRuns(TraceBackFrame frame, string result, object payload)
+    {
+        if (_running)
+        {
+            return null;
+        }
+        Interlocked.Increment(ref _deferredStops);
+        string where;
+        try
+        {
+            where = frame.f_code.co_filename + ":" + Convert.ToString(frame.f_lineno, System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            where = "?";
+        }
+        try
+        {
+            DeferredCodeStopped?.Invoke(where);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // A listener must not keep deferred code alive.
+        }
+        throw new KeyboardInterruptException(Brand.Product + ": code left behind by a script tried to run after its run had ended; it was stopped (ADR-036)");
     }
 
     /// <summary>Imports a namespace or module with the engine's own (unguarded) builtins; null when it cannot be imported.</summary>

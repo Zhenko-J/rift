@@ -172,6 +172,15 @@ def test_script_errors_carry_their_own_message() -> None:
     assert compile_failure("python", {"line": 3, "message": "bad"}).startswith(
         "SyntaxError at line 3: bad"
     )
+    # ADR-036: a Python script refused by the add-in's script policy keeps its own type.
+    assert compile_failure(
+        "python",
+        {
+            "line": 2,
+            "type": "PolicyError",
+            "message": "not allowed in RIFT Python scripts: line 2 .Idling",
+        },
+    ).startswith("PolicyError at line 2: not allowed in RIFT Python scripts")
     exc = readable(
         RiftError(
             "SCRIPT_ERROR",

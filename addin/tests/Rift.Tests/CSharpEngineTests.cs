@@ -87,6 +87,30 @@ public sealed class CSharpEngineTests : IClassFixture<CSharpEngineTests.Fixture>
         Assert.Contains("event", c.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("PostCommand", "deferred code")]
+    [InlineData("OpenDocumentFile", "open, create or copy documents")]
+    [InlineData("CopyModel", "open, create or copy documents")]
+    [InlineData("Refresh", null)]
+    public void Revit_members_that_defer_code_or_open_documents_are_refused(string member, string? reason)
+    {
+        // ADR-036: checked on the bound symbol of a Revit API type (a stand-in compiled here: the tests do not load Revit).
+        var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(
+            "namespace Autodesk.Revit.UI { public class UIApplication { public void " + member + "(int id) { } } }");
+        var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create("stand-in", new[] { tree },
+            new[] { Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(typeof(object).Assembly.Location) });
+        Microsoft.CodeAnalysis.ISymbol method = compilation.GetTypeByMetadataName("Autodesk.Revit.UI.UIApplication")!.GetMembers(member)[0];
+        string? found = CSharpPolicy.Refusal(method);
+        if (reason is null)
+        {
+            Assert.Null(found);
+        }
+        else
+        {
+            Assert.Contains(reason, found, StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public void The_script_cannot_close_the_wrapper()
     {

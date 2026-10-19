@@ -154,7 +154,7 @@ public sealed class AuditPresetTests : IClassFixture<EngineFixture>, IDisposable
     {
         Preset preset = PresetCatalog.Default.Find(name)!;
         string source = PresetCatalog.Default.Source(preset);
-        CompileResult compiled = _fixture.Engine.Compile(source, preset.Name + ".py");
+        CompileResult compiled = _fixture.Engine.Compile(source, preset.Name + ".py", ScriptTrust.Shipped);
         Assert.True(compiled.Ok, compiled.Message);
 
         var imports = Regex.Matches(source, @"^\s*(?:import|from)\s+([\w.]+)(.*)$", RegexOptions.Multiline)

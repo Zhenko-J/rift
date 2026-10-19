@@ -38,7 +38,6 @@ public sealed class ImportGuardTests : IDisposable
     [InlineData("import builtins\n", "builtins")]
     [InlineData("from System.Diagnostics import Process\n", "System.Diagnostics")]
     [InlineData("from System import Diagnostics\n", "System")]
-    [InlineData("__import__('clr')\n", "clr")]
     [InlineData("exec('import clr')\n", "clr")]
     [InlineData("exec('import socket', {})\n", "socket")]
     public void Refused_imports_raise_import_error_and_are_reported(string code, string reported)

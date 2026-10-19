@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 
 using System.Text.Json.Nodes;
@@ -504,7 +505,9 @@ public sealed class Host : IDisposable, IUiHost
         FileLog log = _log;
         _engine = new Lazy<IronPythonEngine>(() =>
         {
-            var e = new IronPythonEngine(new[] { typeof(Document).Assembly, typeof(UIDocument).Assembly }, Directory.Exists(lib) ? lib : null);
+            var e = new IronPythonEngine(new[] { typeof(Document).Assembly, typeof(UIDocument).Assembly }, Directory.Exists(lib) ? lib : null,
+                ScriptPolicy.WithEvents(RevitEventNames()));
+            e.DeferredCodeStopped += where => log.Write("deferred code stopped outside a run (ADR-036): " + where);
             log.Write("engine " + e.EngineVersion + " trace events before=" + e.TraceEventsCompiledBefore.ToString(CultureInfo.InvariantCulture)
                 + " after=" + e.TraceEventsCompiledAfter.ToString(CultureInfo.InvariantCulture)
                 + " timeout_available=" + e.TimeoutAvailable + " late_compile=" + e.LateCompile + " stdlib=" + Directory.Exists(lib));
@@ -524,6 +527,15 @@ public sealed class Host : IDisposable, IUiHost
         });
     }
 
+    /// <summary>The events of the loaded Revit API (ADR-036): scripts may not name them, whatever this Revit version adds.</summary>
+    private static IEnumerable<string> RevitEventNames() =>
+        new[] { typeof(UIApplication), typeof(UIControlledApplication), typeof(Autodesk.Revit.ApplicationServices.Application),
+                typeof(Autodesk.Revit.ApplicationServices.ControlledApplication), typeof(Document), typeof(UIDocument) }
+            .SelectMany(t => t.GetEvents(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static))
+            .Select(ev => ev.Name)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
     private IScriptEngine Engine() => (_engine ?? throw new InvalidOperationException("engine not started")).Value;
 
     private JsonNode? EngineState()
@@ -539,6 +551,7 @@ public sealed class Host : IDisposable, IUiHost
             ["state"] = "ready",
             ["timeout_available"] = e.TimeoutAvailable,
             ["late_compile"] = e.LateCompile,
+            ["deferred_code_stopped"] = e.DeferredCodeStops,
         };
     }
 

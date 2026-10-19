@@ -23,7 +23,14 @@ public interface IScriptEngine : IDisposable
     bool TimeoutAvailable { get; }
 
     /// <summary>Compiles without running. Safe to call outside the Revit API thread (ground truth of the server lint).</summary>
-    CompileResult Compile(string source, string fileName);
+    CompileResult Compile(string source, string fileName) => Compile(source, fileName, ScriptTrust.Agent);
+
+    /// <summary>
+    /// Compiles a script of the given origin (ADR-036): an <see cref="ScriptTrust.Agent"/> script is checked against the
+    /// script policy and later runs with the restricted <c>System</c> and builtins; a <see cref="ScriptTrust.Shipped"/>
+    /// script (typed tool, audit preset) is RIFT's own code.
+    /// </summary>
+    CompileResult Compile(string source, string fileName, ScriptTrust trust);
 
     /// <summary>
     /// Runs a compiled script. Must be called on the Revit API thread, inside the run guard. Throws
@@ -32,9 +39,29 @@ public interface IScriptEngine : IDisposable
     RunResult Run(CompiledScript script, ScriptContext context, TimeSpan timeout, CancellationToken cancellation);
 }
 
-public sealed record CompiledScript(string Language, string Sha256, object Handle);
+/// <summary>Who wrote a script (ADR-036): the assistant (or the user through it), or RIFT itself.</summary>
+public enum ScriptTrust
+{
+    /// <summary>Code sent by a client: <c>run_query</c>, <c>run_modify</c>, a baked command. Checked and restricted.</summary>
+    Agent,
 
-public sealed record CompileResult(bool Ok, CompiledScript? Script, int Line, int Column, string? Message);
+    /// <summary>A script embedded in the add-in (typed tools, audit presets): reviewed with the code, not restricted.</summary>
+    Shipped,
+}
+
+public sealed record CompiledScript(string Language, string Sha256, object Handle)
+{
+    public ScriptTrust Trust { get; init; } = ScriptTrust.Agent;
+}
+
+public sealed record CompileResult(bool Ok, CompiledScript? Script, int Line, int Column, string? Message)
+{
+    /// <summary>
+    /// The error type reported to the caller when the script is not compiled: null for a syntax error (the engine's own
+    /// name is used), <c>PolicyError</c> when the script policy refused it (ADR-035, ADR-036).
+    /// </summary>
+    public string? ErrorType { get; init; }
+}
 
 /// <summary>A namespace or module the engine imports itself and binds to a script variable (<c>DB</c>, <c>UI</c>, <c>System</c>).</summary>
 public sealed record ScriptNamespace(string Name);

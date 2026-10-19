@@ -32,6 +32,11 @@ class Scripted:
                 }
             }
         if op == "compile":
+            if "Idling" in args["script"]:
+                message = "not allowed in RIFT Python scripts: line 3 .Idling (Revit events)"
+                return {
+                    "result": {"ok": False, "line": 3, "type": "PolicyError", "message": message}
+                }
             return {"result": {"ok": True}}
         if op == "run":
             script = args["script"]
@@ -43,6 +48,8 @@ class Scripted:
                 raise RiftError("SCRIPT_ERROR", "refused", {"blocked": ["import:ctypes"]})
             if "while True" in script:
                 raise RiftError("TIMEOUT", "stopped")
+            if "hasattr(System" in script:
+                return {"result": {"outcome": "ok", "result": [False, False, True]}}
             return {"result": {"outcome": "ok", "timing": {"run_ms": 3}}}
         if op == "tool":
             name = args["name"]
